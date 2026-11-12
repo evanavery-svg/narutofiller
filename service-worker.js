@@ -2,7 +2,7 @@
  * Cache-first for the app shell. Bump CACHE_VERSION whenever any file changes
  * so returning visitors get the "Update available" banner.
  */
-const CACHE_VERSION = "v1.0.0";
+const CACHE_VERSION = "v1.1.0";
 const CACHE_NAME = "naruto-filler-" + CACHE_VERSION;
 
 // Relative to this file's location, so it works at a GitHub Pages subpath.
@@ -12,6 +12,8 @@ const PRECACHE = [
   "./styles.css",
   "./app.js",
   "./data/episodes.js",
+  "./firebase-config.js",
+  "./sync.js",
   "./manifest.json",
   "./icons/icon.svg",
   "./icons/icon-192.png",
@@ -52,7 +54,9 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
   const url = new URL(req.url);
-  if (url.origin !== self.location.origin) return; // let the browser handle external links
+  // Only handle this site's own files. Firebase (SDK and database traffic) goes
+  // straight to the network; the app keeps working offline without it.
+  if (url.origin !== self.location.origin) return;
 
   event.respondWith(
     caches.open(CACHE_NAME).then(async (cache) => {

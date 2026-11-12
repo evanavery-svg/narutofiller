@@ -22,6 +22,7 @@ It's plain HTML, CSS and vanilla JavaScript: no frameworks, no build step, no np
   - A **Next episode to watch** button that scrolls to the first unwatched episode, with a **Skip filler** switch. If a filter or search hides that episode, the button changes them so you can see it.
   - A **Hide watched** switch.
   - **Reset progress**, which asks you to confirm first.
+- **Watch together.** Two (or more) people can share one watched list through a free Firebase database. Episodes either of you ticks show up on the other's phone within a second or two, and changes made offline sync later. It's off until you add your own Firebase project; see [Shared progress (Firebase)](#shared-progress-firebase).
 - **Skip-filler guide.** A separate tab that lists the episodes to watch, collapsed into ranges, and the episodes to skip. A switch includes or leaves out mixed episodes. It shows the episode count and the time saved, at about 23 minutes per episode:
   - Including mixed: watch **1–25, 27–96, 98–100, 107–135, 141–142, 220** (130 episodes). This saves about **34 h 30 min**.
   - Canon only: 74 episodes. This saves about **55 h 58 min**.
@@ -32,7 +33,11 @@ It's plain HTML, CSS and vanilla JavaScript: no frameworks, no build step, no np
 ```
 index.html            page markup, PWA and iOS meta tags
 styles.css            dark/orange theme, mobile-first
-app.js                filters, search, tracker, guide, service-worker registration
+app.js                filters, search, tracker, guide, shared-list UI, service-worker registration
+sync.js               shared-list sync over Firestore (loaded only when a shared list is in use)
+firebase-config.js    your Firebase web config (null = sharing off)
+firestore.rules       Firestore security rules to paste into the Firebase console
+firebase.json         points the Firebase CLI / emulator at firestore.rules
 data/episodes.js      const EPISODES = [{ number, title, type }, ...]
 manifest.json         web app manifest
 service-worker.js     precache + cache-first + versioned caches + update flow
@@ -42,6 +47,7 @@ tools/                optional developer scripts (not needed to run the site)
   validate-data.js    checks there are exactly 220 episodes numbered 1–220 and prints counts per type
   make-icons.js       regenerates the PNG icons (needs Playwright)
   e2e-test.js         end-to-end browser test (needs Playwright)
+  sync-test.js        two-device shared-list test against the Firestore emulator
 ```
 
 The episode data is a `.js` file, not `.json`, so browsers don't block it when the page is opened as `file://`.
@@ -73,7 +79,7 @@ All paths are relative (`./…`) and the manifest uses `start_url` and `scope` `
 
 ### Publishing an update
 
-When you change any file, also bump `CACHE_VERSION` in `service-worker.js` (for example `"v1.0.0"` to `"v1.0.1"`). Returning visitors' browsers then download the new version in the background, and they see the **Update available, tap to refresh** banner. Tapping it switches to the new version and reloads. The old cache is deleted, and their watched list is kept.
+When you change any file (including `firebase-config.js`), also bump `CACHE_VERSION` in `service-worker.js` (for example `"v1.1.0"` to `"v1.1.1"`). Returning visitors' browsers then download the new version in the background, and they see the **Update available, tap to refresh** banner. Tapping it switches to the new version and reloads. The old cache is deleted, and their watched list is kept.
 
 ## Installing as an app
 
@@ -85,6 +91,72 @@ The site must be served over HTTPS (for example GitHub Pages) or from `localhost
 - **Desktop (Safari on macOS Sonoma or later):** choose **File → Add to Dock**.
 
 After the first visit the app works with no connection. Watched episodes are saved on the device in `localStorage`, separately for each browser or installed app.
+
+## Shared progress (Firebase)
+
+The **Watch together** card lets two people share one watched list. It uses Google's Firebase Cloud Firestore on the free **Spark** plan, so no credit card is needed. Until you set it up, the card just says sharing isn't set up.
+
+### One-time setup (about 10 minutes)
+
+1. **Create a Firebase project.**
+   - Go to <https://console.firebase.google.com> and sign in with a Google account.
+   - Click **Create a project** (or **Add project**) and give it a name, for example `naruto-filler`.
+   - You can turn Google Analytics off; the app doesn't use it.
+2. **Create the database.**
+   - In the left menu, open **Build → Firestore Database** (or **Databases & Storage → Firestore**) and click **Create database**.
+   - If it asks for an edition, choose **Standard** (the free quota below is for Standard).
+   - Pick a location near you. You can't change it later.
+   - Choose **Start in production mode**.
+3. **Add the security rules.**
+   - Still in Firestore, open the **Rules** tab.
+   - Replace everything there with the contents of [`firestore.rules`](firestore.rules), then click **Publish**.
+4. **Register the web app.**
+   - Click the gear icon next to **Project Overview**, then **Project settings**.
+   - Under **Your apps**, click the web icon (`</>`).
+   - Enter a nickname. Leave **Firebase Hosting** unticked, since the site is on GitHub Pages. Click **Register app**.
+   - Copy the `firebaseConfig = { ... }` object it shows.
+5. **Paste the config into the site.**
+   - Open [`firebase-config.js`](firebase-config.js) and replace `const FIREBASE_CONFIG = null;` with your values, keeping the `const FIREBASE_CONFIG =` part. For example:
+
+     ```js
+     const FIREBASE_CONFIG = {
+       apiKey: "AIza...",
+       authDomain: "naruto-filler.firebaseapp.com",
+       projectId: "naruto-filler",
+       storageBucket: "naruto-filler.firebasestorage.app",
+       messagingSenderId: "1234567890",
+       appId: "1:1234567890:web:abc123"
+     };
+     ```
+
+   - Bump `CACHE_VERSION` in `service-worker.js`, then commit and push. GitHub Pages updates within a minute or two.
+
+The config values aren't secret. Every Firebase web app sends them to the browser, so it's fine to commit them to a public repository. What protects your data is the security rules from step 3.
+
+### Using it
+
+1. On your phone, open the site and tap **Create list** in the **Watch together** card. Anything you've already ticked goes into the new list.
+2. Tap **Invite** and send the link to the other person. On a phone this opens the share sheet; on desktop it copies the link.
+3. They open the link and tap **Join**. Anything they had already ticked is merged in.
+
+The other person can also tap **Join with a code** and type the 16-character code shown on the card, for example `KFMQ-K7JP-AQ9N-CBG8`. Upper or lower case and dashes don't matter.
+
+From then on:
+
+- Ticks, unticks and **Reset progress** show up on both devices, usually within a second or two. Reset clears the list for everyone, and its confirm message says so.
+- The status dot shows **Synced**, **Saving…**, or **Offline · will sync later**.
+- If you tick episodes with no connection, or even close the app before reconnecting, the changes are saved on the phone and sent the next time it opens online. When both people changed the same episode, the most recent change wins.
+- **Leave** (tap twice) stops sharing on that device. Your progress stays, but later ticks are no longer shared. You'll need the code to rejoin.
+- The installed app still works fully offline. The Firebase code downloads only once you're on a shared list, and the rest of the app never depends on it.
+- Sharing doesn't work when you open `index.html` directly as a file. Use the hosted site.
+
+### Privacy and limits
+
+- **The code works like a password.** Anyone with your code or invite link can see and change that list. Nobody can browse the database to find codes: the rules block listing, and codes are random 16-character strings with about 79 bits of randomness. To revoke access, both of you **Leave**, create a new list, and optionally delete the old document under `rooms` in the Firebase console.
+- **Only watch data is stored.** Each list is one document holding episode numbers, watched yes/no, and when each was changed. There are no names, emails or accounts.
+- **Free plan limits.** At the time of writing, the Spark plan's free quota for a Standard database is 50,000 document reads, 20,000 writes and 20,000 deletes per day, plus 1 GiB of storage ([current limits](https://firebase.google.com/docs/firestore/quotas)). Two people ticking episodes use a tiny fraction of that. Because the project has no billing account, it can't charge you. If a limit were ever reached, sync requests would be refused until the quota resets (daily, around midnight Pacific time), and the app would keep working on each device.
+- **Phone clocks matter.** "Most recent change wins" uses each device's clock. If a phone's clock is badly wrong, its changes might win when they shouldn't. Normal automatic phone time is fine.
+- **Optional extra lock-down.** In the [Google Cloud console](https://console.cloud.google.com/apis/credentials) for the same project, you can restrict the browser API key to your site with an HTTP referrer restriction such as `https://<username>.github.io/*`.
 
 ## Data sources
 
@@ -157,13 +229,35 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
 - **PWA:**
   - the service worker registers with the subpath scope and controls the page
   - the first visit doesn't trigger an unexpected reload
-  - there is exactly one versioned cache holding all 13 files
+  - there is exactly one versioned cache holding every file the site needs
   - the manifest parses with no errors
   - Chrome's installability check reports no errors
 - **Offline:** the site loads and works with the network off.
 - **Update flow:** after a new `CACHE_VERSION` is deployed, the banner appears. Tapping it reloads onto the new cache, deletes the old one, and keeps watched episodes.
 
-The last run passed all 56 checks. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100**, including "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
+- **Sharing switched off:** the card explains that sharing isn't set up (or, on `file://`, that it needs the hosted site).
+
+`node tools/sync-test.js` tests sharing with two simulated devices against the local Firestore emulator. To run it:
+
+```bash
+npx firebase-tools emulators:start --only firestore --project demo-naruto-filler
+```
+
+Then, in a second terminal:
+
+```bash
+node tools/sync-test.js
+```
+
+It checks:
+
+- **Create and join:** creating a list; joining through an invite link and through a typed code; the two devices' existing progress being merged; error messages for unknown and badly formed codes.
+- **Live sync:** ticks and unticks going both ways, and reset clearing the other device.
+- **Offline:** changes made offline converging with the other device's changes after reconnecting, including a change made offline just before the app was closed.
+- **Leave:** stopping sharing, and staying left after a reload.
+- **Security rules:** listing rooms, malformed codes, unexpected fields, deletes, and other collections are all refused.
+
+The last runs passed all 58 checks in `e2e-test.js` and all 31 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100**, including "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
 
 ## Legal
 

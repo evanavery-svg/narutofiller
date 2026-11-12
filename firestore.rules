@@ -1,0 +1,36 @@
+rules_version = '2';
+
+// Security rules for the Naruto Filler Guide shared watched list.
+// Paste these into Firebase console > Firestore Database > Rules, then Publish.
+//
+// Each shared list is one document, rooms/{ROOMCODE}. The room code is a random
+// 16-character code (about 79 bits), and it works like a password: anyone who has
+// it can read and change that list. Nobody can list rooms, so codes can't be
+// discovered by browsing the database.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function validRoomId(id) {
+      return id.matches('^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{16}$');
+    }
+
+    function validRoom() {
+      let data = request.resource.data;
+      return data.keys().hasOnly(['eps', 'updatedAt'])
+        && data.eps is map
+        && data.eps.size() <= 220
+        && data.updatedAt == request.time;
+    }
+
+    match /rooms/{roomId} {
+      allow get: if validRoomId(roomId);
+      allow create, update: if validRoomId(roomId) && validRoom();
+      allow list, delete: if false;
+    }
+
+    // Everything else is closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -22,7 +22,9 @@
 
   var STORAGE = {
     watched: "naruto-filler:watched:v1",
-    prefs: "naruto-filler:prefs:v1"
+    prefs: "naruto-filler:prefs:v1",
+    changed: "naruto-filler:changed:v1", // { episodeNumber: last-change time in ms }
+    room: "naruto-filler:room:v1"        // shared list code, if any
   };
 
   // ---------- Storage (fails soft, e.g. in private mode) ----------
@@ -59,6 +61,37 @@
   }
   function saveWatched() {
     save(STORAGE.watched, Array.from(watched).sort(function (a, b) { return a - b; }));
+    save(STORAGE.changed, changedAt);
+  }
+
+  // When each episode was last ticked/unticked on this device (or by a shared-list
+  // partner). Used to merge shared lists: the most recent change to an episode wins.
+  var changedAt = (function () {
+    var raw = load(STORAGE.changed, {}) || {};
+    var out = {};
+    Object.keys(raw).forEach(function (k) {
+      var n = Number(k);
+      if (Number.isInteger(n) && n >= 1 && n <= TOTAL && typeof raw[k] === "number") out[n] = raw[k];
+    });
+    return out;
+  })();
+  var lastStamp = 0;
+  Object.keys(changedAt).forEach(function (k) { lastStamp = Math.max(lastStamp, changedAt[k]); });
+  function stamp() { // strictly increasing on this device
+    lastStamp = Math.max(Date.now(), lastStamp + 1);
+    return lastStamp;
+  }
+
+  /** Records local changes and sends them to the shared list (if any). */
+  function recordChanges(numbers) {
+    var t = stamp();
+    var entries = {};
+    numbers.forEach(function (n) {
+      changedAt[n] = t;
+      entries[n] = { w: watched.has(n), t: t };
+    });
+    saveWatched();
+    if (sync.controller) sync.controller.push(entries);
   }
 
   // ---------- Helpers ----------
@@ -196,7 +229,7 @@
       if (!input.matches('input[type="checkbox"]')) return;
       var n = Number(input.dataset.number);
       if (input.checked) watched.add(n); else watched.delete(n);
-      saveWatched();
+      recordChanges([n]);
       syncRow(n - 1);
       updateProgress();
       if (prefs.hideWatched) applyFilters();
@@ -275,7 +308,8 @@
 
     var n = watched.size;
     $("reset-question").textContent = n
-      ? "Clear all " + n + " watched episode" + (n === 1 ? "" : "s") + "? This can't be undone."
+      ? "Clear all " + n + " watched episode" + (n === 1 ? "" : "s") +
+        (sync.roomId ? " for everyone on the shared list" : "") + "? This can't be undone."
       : "Nothing to reset yet.";
     $("reset-yes").hidden = n === 0;
   }
@@ -317,8 +351,9 @@
     else $("reset-button").focus();
   }
   function doReset() {
+    var cleared = Array.from(watched);
     watched.clear();
-    saveWatched();
+    recordChanges(cleared);
     for (var i = 0; i < TOTAL; i++) syncRow(i);
     updateProgress();
     applyFilters();
@@ -392,6 +427,285 @@
     });
   });
 
+  // ---------- Shared list (Firebase) ----------
+  // The sync code itself lives in sync.js and is loaded only when a shared list is in use.
+  var ROOM_ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"; // no 0/O, 1/I/L
+  var ROOM_RE = /^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{16}$/;
+  var sync = {
+    roomId: null,       // current shared list code (no dashes)
+    controller: null,   // { push, stop } from sync.js once connected
+    module: null,       // sync.js module
+    connecting: false,
+    leaveArmed: false,
+    inviteRoom: null    // room code from an invite link, awaiting confirmation
+  };
+
+  function syncAvailable() {
+    return typeof FIREBASE_CONFIG !== "undefined" && FIREBASE_CONFIG && location.protocol !== "file:";
+  }
+
+  function newRoomCode() {
+    var bytes = new Uint8Array(16);
+    window.crypto.getRandomValues(bytes);
+    var out = "";
+    for (var i = 0; i < 16; i++) out += ROOM_ALPHABET[bytes[i] % ROOM_ALPHABET.length];
+    return out;
+  }
+  function cleanCode(s) {
+    return String(s || "").toUpperCase().replace(/[^0-9A-Z]/g, "");
+  }
+  function prettyCode(c) { return c.replace(/(.{4})(?=.)/g, "$1-"); }
+  function inviteLink(code) {
+    return location.href.split("#")[0].split("?")[0] + "#join=" + code;
+  }
+
+  /** Every episode this device has a value for, as { n: {w, t} }. */
+  function allEntries() {
+    var out = {};
+    for (var n = 1; n <= TOTAL; n++) {
+      var t = changedAt[n] || 0;
+      if (t || watched.has(n)) out[n] = { w: watched.has(n), t: t };
+    }
+    return out;
+  }
+
+  /**
+   * Merges the shared list into this device. For each episode the most recent
+   * change wins. Returns the entries where this device is newer, to upload.
+   */
+  function applyRemote(remote) {
+    var changed = [];
+    var toPush = {};
+    for (var n = 1; n <= TOTAL; n++) {
+      var r = remote[n];
+      var valid = r && typeof r.w === "boolean" && typeof r.t === "number";
+      var lw = watched.has(n);
+      var lt = changedAt[n] || 0;
+      if (!valid) {
+        if (lt || lw) toPush[n] = { w: lw, t: lt };
+        continue;
+      }
+      if (r.t > lt || (r.t === lt && r.w && !lw)) {
+        if (r.w !== lw) {
+          if (r.w) watched.add(n); else watched.delete(n);
+          changed.push(n);
+        }
+        changedAt[n] = r.t;
+        lastStamp = Math.max(lastStamp, r.t);
+      } else if (lt > r.t || (lt === r.t && lw && !r.w)) {
+        toPush[n] = { w: lw, t: lt };
+      }
+    }
+    saveWatched();
+    if (changed.length) {
+      changed.forEach(function (n) { syncRow(n - 1); });
+      updateProgress();
+      applyFilters();
+    }
+    return toPush;
+  }
+
+  var STATUS_TEXT = {
+    connecting: "Connecting…",
+    synced: "Synced",
+    saving: "Saving…",
+    offline: "Offline · will sync later",
+    error: "Problem"
+  };
+  function setSyncStatus(state, message) {
+    var el = $("sync-status");
+    el.dataset.state = state;
+    el.textContent = STATUS_TEXT[state] || state;
+    showSyncMessage(state === "error" ? message : "");
+  }
+  function showSyncMessage(msg, isInfo) {
+    var el = $("sync-message");
+    el.textContent = msg || "";
+    el.hidden = !msg;
+    el.classList.toggle("is-info", !!isInfo);
+  }
+
+  function renderSync() {
+    var available = syncAvailable();
+    $("sync-unavailable").hidden = available;
+    if (!available) {
+      $("sync-unavailable-text").textContent = location.protocol === "file:"
+        ? "Sharing works on the hosted site (for example GitHub Pages), not when you open the file directly."
+        : "Sharing isn't set up on this copy of the site yet. See “Shared progress (Firebase)” in the README.";
+    }
+    var inRoom = available && !!sync.roomId;
+    var inviting = available && !!sync.inviteRoom;
+    $("sync-invite-prompt").hidden = !inviting;
+    $("sync-setup").hidden = !available || inRoom || inviting;
+    $("sync-connected").hidden = !inRoom || inviting;
+    $("sync-status").hidden = !inRoom;
+    if (inRoom) $("sync-code-display").textContent = prettyCode(sync.roomId);
+    if (inviting) {
+      $("sync-invite-text").textContent = (sync.roomId ? "Switch to the shared list " : "Join the shared list ") +
+        prettyCode(sync.inviteRoom) + "? Your progress on this device will be merged into it.";
+    }
+    $("sync-leave").textContent = sync.leaveArmed ? "Tap again to leave" : "Leave";
+    $("sync-leave").classList.toggle("btn-danger", sync.leaveArmed);
+    updateProgress(); // reset wording depends on whether a list is shared
+  }
+
+  function loadSyncModule() {
+    if (sync.module) return Promise.resolve(sync.module);
+    return import("./sync.js").then(function (m) { sync.module = m; return m; });
+  }
+
+  function errorText(err) {
+    if (sync.module) return sync.module.describeError(err);
+    return navigator.onLine
+      ? "Couldn't load the sync code. Check your connection and try again."
+      : "You're offline. Connect to the internet and try again.";
+  }
+
+  /** mode: "create" | "join" | "resume" */
+  function startSync(roomId, mode) {
+    if (sync.connecting) return Promise.resolve(false);
+    sync.connecting = true;
+    showSyncMessage("");
+    if (mode !== "resume") setBusy(true);
+    var lastStatus = ["connecting"];
+    var connected = false;
+    return loadSyncModule().then(function (m) {
+      return m.connect({
+        config: FIREBASE_CONFIG,
+        roomId: roomId,
+        mode: mode,
+        api: {
+          allEntries: allEntries,
+          applyRemote: applyRemote,
+          status: function (s, msg) {
+            lastStatus = [s, msg];
+            if (connected && sync.roomId === roomId) setSyncStatus(s, msg);
+          }
+        }
+      });
+    }).then(function (controller) {
+      // Only drop the previous list once the new one is connected
+      if (sync.controller) sync.controller.stop();
+      sync.controller = controller;
+      sync.roomId = roomId;
+      connected = true;
+      save(STORAGE.room, roomId);
+      renderSync();
+      setSyncStatus(lastStatus[0], lastStatus[1]);
+      if (mode === "create") toast("Shared list created. Tap Invite to share it.");
+      if (mode === "join") toast("Joined the shared list");
+      return true;
+    }).catch(function (err) {
+      if (mode === "resume") {
+        // Couldn't connect at startup (usually offline): keep the list and retry later.
+        setSyncStatus(navigator.onLine ? "error" : "offline", errorText(err));
+      } else {
+        showSyncMessage(errorText(err));
+      }
+      return false;
+    }).then(function (ok) {
+      sync.connecting = false;
+      setBusy(false);
+      return ok;
+    });
+  }
+
+  function setBusy(busy) {
+    ["sync-create", "sync-join-submit", "sync-invite-accept"].forEach(function (id) { $(id).disabled = busy; });
+  }
+
+  function leaveRoom() {
+    if (sync.controller) sync.controller.stop();
+    sync.controller = null;
+    sync.roomId = null;
+    sync.leaveArmed = false;
+    save(STORAGE.room, null);
+    renderSync();
+    toast("Left the shared list. Your progress stays on this device.");
+  }
+
+  function shareInvite() {
+    var url = inviteLink(sync.roomId);
+    var text = "Join my Naruto watch list. Code: " + prettyCode(sync.roomId);
+    if (navigator.share) {
+      navigator.share({ title: "Naruto Filler Guide", text: text, url: url }).catch(function () {});
+    } else if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(
+        function () { toast("Invite link copied"); },
+        function () { window.prompt("Copy this invite link:", url); }
+      );
+    } else {
+      window.prompt("Copy this invite link:", url);
+    }
+  }
+
+  /** Handles "#join=CODE" invite links. */
+  function readInviteFromUrl() {
+    var m = location.hash.match(/join=([0-9A-Za-z-]+)/);
+    if (!m) return;
+    history.replaceState(null, "", location.href.split("#")[0]);
+    var code = cleanCode(m[1]);
+    if (!ROOM_RE.test(code)) { toast("That invite link isn't valid"); return; }
+    if (code === sync.roomId) { toast("You're already on this shared list"); return; }
+    sync.inviteRoom = code;
+    selectTab("episodes");
+  }
+
+  function initSync() {
+    var saved = load(STORAGE.room, null);
+    if (typeof saved === "string" && ROOM_RE.test(saved)) sync.roomId = saved;
+
+    $("sync-create").addEventListener("click", function () {
+      startSync(newRoomCode(), "create");
+    });
+    $("sync-join-toggle").addEventListener("click", function () {
+      var form = $("sync-join-form");
+      form.hidden = !form.hidden;
+      if (!form.hidden) $("sync-code").focus();
+    });
+    $("sync-join-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var code = cleanCode($("sync-code").value);
+      if (!ROOM_RE.test(code)) { showSyncMessage("Codes are 16 letters and numbers, like ABCD-EFGH-JKMN-PQRS."); return; }
+      startSync(code, "join").then(function (ok) {
+        if (ok) { $("sync-code").value = ""; $("sync-join-form").hidden = true; }
+      });
+    });
+    $("sync-invite").addEventListener("click", shareInvite);
+    $("sync-leave").addEventListener("click", function () {
+      if (sync.leaveArmed) { leaveRoom(); return; }
+      sync.leaveArmed = true;
+      renderSync();
+      setTimeout(function () { if (sync.leaveArmed) { sync.leaveArmed = false; renderSync(); } }, 4000);
+    });
+    $("sync-invite-accept").addEventListener("click", function () {
+      var code = sync.inviteRoom;
+      startSync(code, "join").then(function (ok) {
+        if (ok) { sync.inviteRoom = null; renderSync(); }
+      });
+    });
+    $("sync-invite-decline").addEventListener("click", function () {
+      sync.inviteRoom = null;
+      showSyncMessage("");
+      renderSync();
+    });
+
+    readInviteFromUrl();
+    window.addEventListener("hashchange", function () { readInviteFromUrl(); renderSync(); });
+    renderSync();
+
+    if (syncAvailable() && sync.roomId) startSync(sync.roomId, "resume");
+
+    // Retry after an offline start once the connection is back
+    function retry() {
+      if (syncAvailable() && sync.roomId && !sync.controller && !sync.connecting) startSync(sync.roomId, "resume");
+    }
+    window.addEventListener("online", retry);
+    document.addEventListener("visibilitychange", function () {
+      if (document.visibilityState === "visible") retry();
+    });
+  }
+
   // ---------- Wire up ----------
   function init() {
     buildFilters();
@@ -435,6 +749,8 @@
     window.addEventListener("storage", function (e) {
       if (e.key !== STORAGE.watched) return;
       watched = new Set(load(STORAGE.watched, []));
+      var c = load(STORAGE.changed, {}) || {};
+      Object.keys(c).forEach(function (k) { changedAt[k] = c[k]; lastStamp = Math.max(lastStamp, c[k]); });
       for (var i = 0; i < TOTAL; i++) syncRow(i);
       updateProgress();
       applyFilters();
@@ -444,6 +760,7 @@
     applyFilters();
     updateProgress();
     renderGuide();
+    initSync();
 
     if (location.protocol === "file:") $("file-note").hidden = false;
     registerServiceWorker();

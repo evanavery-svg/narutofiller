@@ -89,6 +89,46 @@
         </div>
       </div>
 
+      <div class="card sync" id="sync-card" aria-labelledby="sync-title">
+        <div class="sync-head">
+          <h2 id="sync-title" class="card-title">Watch together</h2>
+          <span id="sync-status" class="sync-status" data-state="connecting" role="status" hidden>Connecting…</span>
+        </div>
+
+        <p id="sync-unavailable" class="muted small sync-text" hidden><span id="sync-unavailable-text"></span></p>
+
+        <div id="sync-setup" hidden>
+          <p class="muted small sync-text">Share one watched list with someone. Episodes either of you ticks show up on both devices.</p>
+          <div class="sync-buttons">
+            <button type="button" id="sync-create" class="btn">Create list</button>
+            <button type="button" id="sync-join-toggle" class="btn btn-ghost">Join with a code</button>
+          </div>
+          <form id="sync-join-form" class="sync-join" hidden>
+            <label class="visually-hidden" for="sync-code">Shared list code</label>
+            <input id="sync-code" type="text" placeholder="ABCD-EFGH-JKMN-PQRS" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="24" enterkeyhint="go">
+            <button type="submit" id="sync-join-submit" class="btn">Join</button>
+          </form>
+        </div>
+
+        <div id="sync-connected" hidden>
+          <p class="sync-text small">Shared list <code id="sync-code-display" class="sync-code"></code></p>
+          <div class="sync-buttons">
+            <button type="button" id="sync-invite" class="btn">Invite</button>
+            <button type="button" id="sync-leave" class="btn btn-ghost">Leave</button>
+          </div>
+        </div>
+
+        <div id="sync-invite-prompt" hidden>
+          <p class="sync-text small" id="sync-invite-text"></p>
+          <div class="sync-buttons">
+            <button type="button" id="sync-invite-accept" class="btn btn-primary-sm">Join</button>
+            <button type="button" id="sync-invite-decline" class="btn btn-ghost">Not now</button>
+          </div>
+        </div>
+
+        <p id="sync-message" class="sync-message small" hidden></p>
+      </div>
+
       <div class="toolbar">
         <label class="search">
           <span class="visually-hidden">Search episodes</span>
@@ -169,6 +209,7 @@
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
   <script src="./data/episodes.js"></script>
+  <script src="./firebase-config.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

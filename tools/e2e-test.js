@@ -13,7 +13,9 @@ const path = require("path");
 const vm = require("vm");
 
 const ROOT = path.join(__dirname, "..");
-const FILES = ["index.html", "styles.css", "app.js", "manifest.json", "service-worker.js", "data", "icons"];
+const FILES = ["index.html", "styles.css", "app.js", "sync.js", "firebase-config.js", "manifest.json", "service-worker.js", "data", "icons"];
+const SW_VERSION = fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8").match(/CACHE_VERSION = "([^"]+)"/)[1];
+const PRECACHE_COUNT = (fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8").match(/const PRECACHE = \[([\s\S]*?)\]/)[1].match(/"\.\//g) || []).length;
 const PORT = 8765;
 const BASE = `http://localhost:${PORT}/naruto-filler/`;
 
@@ -80,6 +82,7 @@ const collapse = (nums) => {
         try { return (await navigator.serviceWorker.getRegistrations()).length === 0; } catch (e) { return true; } // not allowed on file://
       }));
       check("file://: offline/install note shown", await page.locator("#file-note").isVisible());
+      check("file://: sharing explains it needs the hosted site", (await page.textContent("#sync-unavailable-text")).includes("hosted site"));
       await page.locator(`.episode >> nth=4 >> input`).check();
       await page.reload();
       check("file://: watched state persists", await page.locator(`#ep-5 input`).isChecked());
@@ -105,6 +108,7 @@ const collapse = (nums) => {
 
     check("http: 220 episodes rendered", (await page.locator(".episode").count()) === 220);
     check("http: legend lists 4 types", (await page.locator("#legend-list .legend-item").count()) === 4);
+    check("sync: not configured -> setup note, no buttons", (await page.locator("#sync-unavailable").isVisible()) && !(await page.locator("#sync-create").isVisible()));
 
     // Filters
     await toggle("filler");
@@ -211,8 +215,8 @@ const collapse = (nums) => {
       const c = await caches.open(keys[0]);
       return { keys, urls: (await c.keys()).map((r) => new URL(r.url).pathname) };
     });
-    check("sw: one versioned cache", cached.keys.length === 1 && cached.keys[0] === "naruto-filler-v1.0.0", cached.keys.join(","));
-    check("sw: precached 13 files", cached.urls.length >= 13, cached.urls.length);
+    check("sw: one versioned cache", cached.keys.length === 1 && cached.keys[0] === "naruto-filler-" + SW_VERSION, cached.keys.join(","));
+    check(`sw: precached all ${PRECACHE_COUNT} files`, cached.urls.length >= PRECACHE_COUNT, cached.urls.length);
 
     const cdp = await context.newCDPSession(page);
     const manifest = await cdp.send("Page.getAppManifest");
@@ -233,7 +237,7 @@ const collapse = (nums) => {
 
     // Update flow: publish a new version, expect banner, click it, expect reload on new cache
     const swPath = path.join(site, "service-worker.js");
-    fs.writeFileSync(swPath, fs.readFileSync(swPath, "utf8").replace('"v1.0.0"', '"v1.0.1-test"'));
+    fs.writeFileSync(swPath, fs.readFileSync(swPath, "utf8").replace(`"${SW_VERSION}"`, '"v-update-test"'));
     await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
     await page.waitForSelector("#update-banner:not([hidden])", { timeout: 10000 }).catch(() => {});
     check("update: banner shown", await page.locator("#update-banner").isVisible());
@@ -241,7 +245,7 @@ const collapse = (nums) => {
     await Promise.all([page.waitForEvent("load", { timeout: 10000 }).catch(() => {}), page.click("#update-button")]);
     await page.waitForTimeout(500);
     const keysAfter = await page.evaluate(() => caches.keys());
-    check("update: reloaded onto new cache, old cache deleted", keysAfter.length === 1 && keysAfter[0] === "naruto-filler-v1.0.1-test", keysAfter.join(","));
+    check("update: reloaded onto new cache, old cache deleted", keysAfter.length === 1 && keysAfter[0] === "naruto-filler-v-update-test", keysAfter.join(","));
     check("update: watched state kept", await page.locator("#ep-10 input").isChecked());
 
     check("http: no JS/console errors", errors.length === 0, errors.join(" | "));

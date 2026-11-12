@@ -355,3 +355,45 @@ button { cursor: pointer; }
 @media (display-mode: standalone) {
   .app-footer { padding-bottom: calc(36px + var(--safe-bottom)); }
 }
+
+/* ---------- Watch together (shared list) ---------- */
+.sync-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
+.sync-head .card-title { margin: 0; }
+.sync-text { margin: 8px 0 12px; }
+.sync-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.sync-buttons .btn { flex: 1 1 140px; }
+.btn-primary-sm { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn-primary-sm:hover { background: var(--accent-strong); }
+.btn:disabled { opacity: 0.55; cursor: progress; }
+
+.sync-join { display: flex; gap: 8px; margin-top: 10px; }
+.sync-join input {
+  flex: 1 1 auto; min-width: 0; min-height: 44px; padding: 8px 12px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  font-size: 16px; letter-spacing: 0.06em; text-transform: uppercase; font-variant-numeric: tabular-nums;
+}
+.sync-join input::placeholder { text-transform: none; letter-spacing: 0.04em; color: #8a7e74; }
+.sync-join input:focus { border-color: var(--accent); outline: none; box-shadow: 0 0 0 3px rgb(255 122 26 / 0.25); }
+
+.sync-code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.95rem; font-weight: 700;
+  color: var(--text); background: var(--surface-2); padding: 2px 8px; border-radius: 6px; letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.sync-status {
+  display: inline-flex; align-items: center; gap: 6px; flex: none;
+  font-size: 0.8rem; font-weight: 600; color: var(--muted);
+}
+.sync-status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.sync-status[data-state="synced"] { color: var(--canon); }
+.sync-status[data-state="synced"]::before { background: var(--canon); }
+.sync-status[data-state="saving"]::before,
+.sync-status[data-state="connecting"]::before { background: var(--mixed); animation: pulse 1s ease-in-out infinite alternate; }
+.sync-status[data-state="offline"]::before { background: #8a7e74; }
+.sync-status[data-state="error"] { color: var(--filler); }
+.sync-status[data-state="error"]::before { background: var(--filler); }
+@keyframes pulse { from { opacity: 1; } to { opacity: 0.3; } }
+
+.sync-message { margin: 10px 0 0; color: var(--filler); }
+.sync-message.is-info { color: var(--muted); }
