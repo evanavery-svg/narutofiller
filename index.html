@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Naruto Filler Guide</title>
+  <meta name="description" content="Which episodes of the original Naruto anime (1–220) are filler and which are canon, with a watch tracker and a skip-filler guide. Works offline.">
+
+  <!-- PWA -->
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#14110f">
+  <meta name="mobile-web-app-capable" content="yes">
+
+  <!-- iOS -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Naruto Filler">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+
+  <link rel="icon" type="image/svg+xml" href="./icons/icon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png">
+
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <div id="update-banner" class="update-banner" hidden>
+    <button type="button" id="update-button">Update available, tap to refresh</button>
+  </div>
+
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">NF</span>
+        <div>
+          <h1>Naruto Filler Guide</h1>
+          <p class="subtitle">Original series · episodes 1–220</p>
+        </div>
+      </div>
+      <nav class="tabs" role="tablist" aria-label="Sections">
+        <button type="button" role="tab" id="tab-episodes" aria-controls="panel-episodes" aria-selected="true">Episodes</button>
+        <button type="button" role="tab" id="tab-guide" aria-controls="panel-guide" aria-selected="false" tabindex="-1">Skip-filler guide</button>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main" class="container">
+    <!-- ============ Episodes ============ -->
+    <section id="panel-episodes" role="tabpanel" aria-labelledby="tab-episodes">
+      <div class="card tracker" aria-labelledby="tracker-title">
+        <h2 id="tracker-title" class="card-title">Your progress</h2>
+
+        <div class="progress-row">
+          <div class="progress-label">
+            <span>All episodes</span>
+            <span id="progress-all-text" class="progress-value">0 / 220</span>
+          </div>
+          <div class="progress-track"><div id="progress-all-bar" class="progress-bar" role="progressbar" aria-label="All episodes watched" aria-valuemin="0" aria-valuemax="220" aria-valuenow="0"></div></div>
+        </div>
+
+        <div class="progress-row">
+          <div class="progress-label">
+            <span>Canon episodes</span>
+            <span id="progress-canon-text" class="progress-value">0 / 0</span>
+          </div>
+          <div class="progress-track"><div id="progress-canon-bar" class="progress-bar progress-bar--canon" role="progressbar" aria-label="Canon episodes watched" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"></div></div>
+        </div>
+
+        <div class="tracker-actions">
+          <button type="button" id="next-button" class="btn btn-primary">
+            <span class="btn-main">Next episode to watch</span>
+            <span id="next-hint" class="btn-sub"></span>
+          </button>
+          <label class="switch">
+            <input type="checkbox" id="skip-filler-next">
+            <span class="switch-ui" aria-hidden="true"></span>
+            <span>Skip filler</span>
+          </label>
+        </div>
+
+        <div class="reset-area">
+          <button type="button" id="reset-button" class="btn btn-ghost">Reset progress</button>
+          <div id="reset-confirm" class="reset-confirm" hidden>
+            <span id="reset-question">Clear all watched episodes?</span>
+            <button type="button" id="reset-yes" class="btn btn-danger">Yes, reset</button>
+            <button type="button" id="reset-cancel" class="btn btn-ghost">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <label class="search">
+          <span class="visually-hidden">Search episodes</span>
+          <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input type="search" id="search" placeholder="Search by number or title…" autocomplete="off" spellcheck="false" enterkeyhint="search">
+        </label>
+
+        <div class="filters" role="group" aria-label="Filter by episode type" id="filters"></div>
+
+        <div class="toolbar-row">
+          <p id="result-count" class="result-count" aria-live="polite"></p>
+          <label class="switch switch--small">
+            <input type="checkbox" id="hide-watched">
+            <span class="switch-ui" aria-hidden="true"></span>
+            <span>Hide watched</span>
+          </label>
+        </div>
+      </div>
+
+      <details class="legend card">
+        <summary>What do the types mean?</summary>
+        <dl id="legend-list"></dl>
+      </details>
+
+      <ol id="episode-list" class="episode-list" aria-label="Episodes"></ol>
+      <p id="empty-state" class="empty-state" hidden>No episodes match. Try a different search or turn on more types.</p>
+    </section>
+
+    <!-- ============ Skip-filler guide ============ -->
+    <section id="panel-guide" role="tabpanel" aria-labelledby="tab-guide" hidden>
+      <div class="card">
+        <h2 class="card-title">Watch order without filler</h2>
+        <p class="muted">Watch these episodes in order and skip the rest. Mixed episodes contain manga story alongside anime-original scenes, so most viewers keep them.</p>
+
+        <label class="switch">
+          <input type="checkbox" id="include-mixed" checked>
+          <span class="switch-ui" aria-hidden="true"></span>
+          <span>Include mixed canon/filler episodes</span>
+        </label>
+
+        <div class="stats">
+          <div class="stat">
+            <span class="stat-value" id="guide-watch-count">0</span>
+            <span class="stat-label">episodes to watch</span>
+          </div>
+          <div class="stat">
+            <span class="stat-value" id="guide-skip-count">0</span>
+            <span class="stat-label">episodes skipped</span>
+          </div>
+          <div class="stat stat--accent">
+            <span class="stat-value" id="guide-time-saved">0</span>
+            <span class="stat-label">time saved (≈23 min/ep)</span>
+          </div>
+        </div>
+        <p class="muted small" id="guide-watch-time"></p>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">Episodes to watch</h3>
+        <ul id="guide-watch-ranges" class="range-list" aria-label="Episode ranges to watch"></ul>
+        <p class="range-text" id="guide-watch-text"></p>
+      </div>
+
+      <div class="card">
+        <h3 class="card-title">Episodes to skip</h3>
+        <ul id="guide-skip-ranges" class="range-list range-list--skip" aria-label="Episode ranges to skip"></ul>
+        <p class="range-text" id="guide-skip-text"></p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <p>Classifications from <a href="https://www.animefillerlist.com/shows/naruto" rel="noopener" target="_blank">Anime Filler List</a>, cross-checked with the <a href="https://naruto.fandom.com/wiki/List_of_Animated_Media" rel="noopener" target="_blank">Naruto Fandom wiki</a>.</p>
+    <p>Fan-made and unofficial. Not affiliated with the creators, publishers or broadcasters of Naruto.</p>
+    <p id="file-note" class="small" hidden>You opened this page from a file, so it can't be installed as an app or cached for offline use. Host it (e.g. on GitHub Pages) to enable that. Your watched list still saves.</p>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="./data/episodes.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
