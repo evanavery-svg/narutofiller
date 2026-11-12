@@ -2,7 +2,7 @@
  * Cache-first for the app shell. Bump CACHE_VERSION whenever any file changes
  * so returning visitors get the "Update available" banner.
  */
-const CACHE_VERSION = "v1.1.0";
+const CACHE_VERSION = "v1.2.0";
 const CACHE_NAME = "naruto-filler-" + CACHE_VERSION;
 
 // Relative to this file's location, so it works at a GitHub Pages subpath.
@@ -21,7 +21,8 @@ const PRECACHE = [
   "./icons/icon-maskable-192.png",
   "./icons/icon-maskable-512.png",
   "./icons/apple-touch-icon.png",
-  "./icons/favicon-32.png"
+  "./icons/favicon-32.png",
+  "./fonts/bebas-neue-latin-400.woff2"
 ];
 
 self.addEventListener("install", (event) => {

@@ -13,7 +13,7 @@ const path = require("path");
 const vm = require("vm");
 
 const ROOT = path.join(__dirname, "..");
-const FILES = ["index.html", "styles.css", "app.js", "sync.js", "firebase-config.js", "manifest.json", "service-worker.js", "data", "icons"];
+const FILES = ["index.html", "styles.css", "app.js", "sync.js", "firebase-config.js", "manifest.json", "service-worker.js", "data", "icons", "fonts"];
 const SW_VERSION = fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8").match(/CACHE_VERSION = "([^"]+)"/)[1];
 const PRECACHE_COUNT = (fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8").match(/const PRECACHE = \[([\s\S]*?)\]/)[1].match(/"\.\//g) || []).length;
 const PORT = 8765;
@@ -144,6 +144,15 @@ const collapse = (nums) => {
     for (const n of [1, 2, 3, 26]) await page.check(`#ep-${n} input`);
     check("tracker: all progress 4/220", (await page.textContent("#progress-all-text")).startsWith("4 / 220"));
     check("tracker: canon progress 3/74", (await page.textContent("#progress-canon-text")) === "3 / 74");
+    check("map: 220 squares in each map", (await page.locator("#ep-map .cell").count()) === 220 && (await page.locator("#guide-map .cell").count()) === 220);
+    check("map: watched squares lit", (await page.locator("#ep-map .cell.is-on").count()) === 4);
+    check("map: next episode marked", (await page.getAttribute("#ep-map .cell.is-next", "data-n")) === "4");
+    check("ring: shows 2%", (await page.textContent("#ring-value")) === "2%");
+    await page.fill("#search", "zzz");
+    await page.click('#ep-map .cell[data-n="150"]');
+    await page.waitForTimeout(700);
+    check("map: tapping a square jumps to that episode", await page.locator("#ep-150").isVisible() && (await page.locator("#ep-150.is-highlight").count()) === 1);
+    await page.fill("#search", "");
     // next ep (skip filler on by default)
     check("next: skip filler default -> ep 4", (await page.textContent("#next-hint")).startsWith("Ep 4 "));
     for (let n = 4; n <= 25; n++) await page.check(`#ep-${n} input`);
@@ -189,6 +198,7 @@ const collapse = (nums) => {
     check("guide (incl. mixed): ranges match data", (await page.textContent("#guide-watch-text")) === watchIncl, await page.textContent("#guide-watch-text"));
     check("guide (incl. mixed): skip ranges", (await page.textContent("#guide-skip-text")) === collapse(expand(AFL.filler)));
     check("guide (incl. mixed): count 130", (await page.textContent("#guide-watch-count")) === "130");
+    check("guide map: 130 squares lit", (await page.locator("#guide-map .cell.is-on").count()) === 130);
     check("guide (incl. mixed): time saved 90×23 = 34 h 30 min", (await page.textContent("#guide-time-saved")) === "~34 h 30 min");
     await page.click("#include-mixed + .switch-ui");
     check("guide (canon only): ranges match data", (await page.textContent("#guide-watch-text")) === collapse(expand(AFL.canon)), await page.textContent("#guide-watch-text"));

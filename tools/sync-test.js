@@ -16,7 +16,7 @@ const os = require("os");
 const path = require("path");
 
 const ROOT = path.join(__dirname, "..");
-const FILES = ["index.html", "styles.css", "app.js", "sync.js", "manifest.json", "service-worker.js", "data", "icons"];
+const FILES = ["index.html", "styles.css", "app.js", "sync.js", "manifest.json", "service-worker.js", "data", "icons", "fonts"];
 const PORT = 8766;
 const BASE = `http://localhost:${PORT}/naruto-filler/`;
 const EMULATOR = process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080";

@@ -18,12 +18,13 @@ It's plain HTML, CSS and vanilla JavaScript: no frameworks, no build step, no np
 - **Search.** One box that matches the episode number (`135`, `#135`, `ep 135`) or any part of the title. It ignores case and updates as you type. It works together with the filters.
 - **Watch tracker.**
   - A checkbox on each episode, saved in `localStorage`.
-  - Progress bars for all episodes (watched/220) and for canon only (watched/74).
+  - A progress ring and progress bars for all episodes (watched/220) and for canon only (watched/74).
+  - An **episode map**: one square per episode, colored by type and lit up once watched, with the next episode outlined. Tap a square to jump to that episode.
   - A **Next episode to watch** button that scrolls to the first unwatched episode, with a **Skip filler** switch. If a filter or search hides that episode, the button changes them so you can see it.
   - A **Hide watched** switch.
   - **Reset progress**, which asks you to confirm first.
 - **Watch together.** Two (or more) people can share one watched list through a free Firebase database. Episodes either of you ticks show up on the other's phone within a second or two, and changes made offline sync later. It's off until you add your own Firebase project; see [Shared progress (Firebase)](#shared-progress-firebase).
-- **Skip-filler guide.** A separate tab that lists the episodes to watch, collapsed into ranges, and the episodes to skip. A switch includes or leaves out mixed episodes. It shows the episode count and the time saved, at about 23 minutes per episode:
+- **Skip-filler guide.** A separate tab that lists the episodes to watch, collapsed into ranges, and the episodes to skip, with a map showing which to watch. A switch includes or leaves out mixed episodes. It shows the episode count and the time saved, at about 23 minutes per episode:
   - Including mixed: watch **1–25, 27–96, 98–100, 107–135, 141–142, 220** (130 episodes). This saves about **34 h 30 min**.
   - Canon only: 74 episodes. This saves about **55 h 58 min**.
 - **PWA.** You can install it on a phone or desktop. Every file is cached on the first visit, so the whole app then works offline. When a new version is deployed, an "Update available, tap to refresh" banner appears instead of the app quietly serving old files.
@@ -42,6 +43,7 @@ data/episodes.js      const EPISODES = [{ number, title, type }, ...]
 manifest.json         web app manifest
 service-worker.js     precache + cache-first + versioned caches + update flow
 icons/                original "NF" icons (192, 512, maskable 192/512, Apple 180, favicon, SVG)
+fonts/                Bebas Neue display font (self-hosted, 14 KB) and its license (OFL.txt)
 .nojekyll             tells GitHub Pages to serve the files as they are
 tools/                optional developer scripts (not needed to run the site)
   validate-data.js    checks there are exactly 220 episodes numbered 1–220 and prints counts per type
@@ -225,7 +227,8 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
   - hiding watched episodes
   - watched episodes surviving a reload
   - reset with both confirm and cancel
-- **Guide:** ranges, counts and time saved, with and without mixed episodes.
+- **Episode map and ring:** the map lights up watched episodes and marks the next one, tapping a square jumps to it, and the ring shows the right percentage.
+- **Guide:** ranges, counts, time saved and the map, with and without mixed episodes.
 - **PWA:**
   - the service worker registers with the subpath scope and controls the page
   - the first visit doesn't trigger an unexpected reload
@@ -257,8 +260,8 @@ It checks:
 - **Leave:** stopping sharing, and staying left after a reload.
 - **Security rules:** listing rooms, malformed codes, unexpected fields, deletes, and other collections are all refused.
 
-The last runs passed all 58 checks in `e2e-test.js` and all 31 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100**, including "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
+The last runs passed all 64 checks in `e2e-test.js` and all 31 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 99**, including "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
 
 ## Legal
 
-This is an unofficial fan project. It isn't affiliated with or endorsed by Masashi Kishimoto, Shueisha, Studio Pierrot, TV Tokyo or VIZ Media. It uses no official logos, artwork or character images: the interface is text and CSS, and the icons are original designs. Episode titles are listed for identification only.
+This is an unofficial fan project. It isn't affiliated with or endorsed by Masashi Kishimoto, Shueisha, Studio Pierrot, TV Tokyo or VIZ Media. It uses no official logos, artwork or character images: the interface is text and CSS, and the icons are original designs. The headings use [Bebas Neue](https://github.com/dharmatype/Bebas-Neue) by Dharma Type, under the SIL Open Font License 1.1 (see `fonts/OFL.txt`). Episode titles are listed for identification only.

@@ -21,6 +21,12 @@
   <link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png">
 
   <link rel="stylesheet" href="./styles.css">
+  <!-- Hide the main content until app.js has filled it in, so nothing jumps around while loading.
+       Safety net: show it after 3 s even if app.js never runs. -->
+  <script>
+    document.documentElement.classList.add("js-loading");
+    setTimeout(function () { document.documentElement.classList.remove("js-loading"); }, 3000);
+  </script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -34,7 +40,7 @@
       <div class="brand">
         <span class="brand-mark" aria-hidden="true">NF</span>
         <div>
-          <h1>Naruto Filler Guide</h1>
+          <h1>Naruto <span class="h1-accent">Filler</span> Guide</h1>
           <p class="subtitle">Original series · episodes 1–220</p>
         </div>
       </div>
@@ -48,23 +54,39 @@
   <main id="main" class="container">
     <!-- ============ Episodes ============ -->
     <section id="panel-episodes" role="tabpanel" aria-labelledby="tab-episodes">
-      <div class="card tracker" aria-labelledby="tracker-title">
-        <h2 id="tracker-title" class="card-title">Your progress</h2>
-
-        <div class="progress-row">
-          <div class="progress-label">
-            <span>All episodes</span>
-            <span id="progress-all-text" class="progress-value">0 / 220</span>
+      <div class="card tracker hero" aria-labelledby="tracker-title">
+        <div class="tracker-top">
+          <div class="ring" id="progress-ring" aria-hidden="true">
+            <div class="ring-track"></div>
+            <div class="ring-inner">
+              <span class="ring-value" id="ring-value">0%</span>
+              <span class="ring-label">watched</span>
+            </div>
           </div>
-          <div class="progress-track"><div id="progress-all-bar" class="progress-bar" role="progressbar" aria-label="All episodes watched" aria-valuemin="0" aria-valuemax="220" aria-valuenow="0"></div></div>
+          <div class="tracker-bars">
+            <h2 id="tracker-title" class="card-title">Your progress</h2>
+
+            <div class="progress-row">
+              <div class="progress-label">
+                <span>All episodes</span>
+                <span id="progress-all-text" class="progress-value">0 / 220</span>
+              </div>
+              <div class="progress-track"><div id="progress-all-bar" class="progress-bar" role="progressbar" aria-label="All episodes watched" aria-valuemin="0" aria-valuemax="220" aria-valuenow="0"></div></div>
+            </div>
+
+            <div class="progress-row">
+              <div class="progress-label">
+                <span>Canon episodes</span>
+                <span id="progress-canon-text" class="progress-value">0 / 0</span>
+              </div>
+              <div class="progress-track"><div id="progress-canon-bar" class="progress-bar progress-bar--canon" role="progressbar" aria-label="Canon episodes watched" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"></div></div>
+            </div>
+          </div>
         </div>
 
-        <div class="progress-row">
-          <div class="progress-label">
-            <span>Canon episodes</span>
-            <span id="progress-canon-text" class="progress-value">0 / 0</span>
-          </div>
-          <div class="progress-track"><div id="progress-canon-bar" class="progress-bar progress-bar--canon" role="progressbar" aria-label="Canon episodes watched" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"></div></div>
+        <div class="map-block">
+          <div class="ep-map" id="ep-map" aria-hidden="true"></div>
+          <p class="map-caption"><span>Every episode, 1–220.</span> <span>Bright squares are watched; tap one to jump to it.</span></p>
         </div>
 
         <div class="tracker-actions">
@@ -184,6 +206,11 @@
           </div>
         </div>
         <p class="muted small" id="guide-watch-time"></p>
+
+        <div class="map-block">
+          <div class="ep-map" id="guide-map" aria-hidden="true"></div>
+          <p class="map-caption"><span>Bright squares are the episodes to watch;</span> <span>faded ones are skipped.</span></p>
+        </div>
       </div>
 
       <div class="card">

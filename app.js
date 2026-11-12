@@ -231,9 +231,44 @@
       if (input.checked) watched.add(n); else watched.delete(n);
       recordChanges([n]);
       syncRow(n - 1);
+      if (input.checked) pop(input.nextElementSibling);
       updateProgress();
       if (prefs.hideWatched) applyFilters();
     });
+  }
+
+  function pop(el) {
+    el.classList.remove("pop");
+    void el.offsetWidth; // restart the animation
+    el.classList.add("pop");
+  }
+
+  // ---------- Episode maps (one square per episode) ----------
+  var mapCells = { progress: [], guide: [] };
+  function buildMap(container, cells) {
+    var frag = document.createDocumentFragment();
+    EPISODES.forEach(function (ep) {
+      var cell = document.createElement("span");
+      cell.className = "cell";
+      cell.dataset.type = ep.type;
+      cell.dataset.n = ep.number;
+      cell.title = "Ep " + ep.number + " · " + ep.title + " (" + TYPE_BY_ID[ep.type].long + ")";
+      frag.appendChild(cell);
+      cells.push(cell);
+    });
+    container.appendChild(frag);
+    // Tap a square to jump to that episode (the list itself is the accessible route)
+    container.addEventListener("click", function (e) {
+      var n = Number(e.target.dataset && e.target.dataset.n);
+      if (n) jumpTo(EPISODES[n - 1]);
+    });
+  }
+  function updateProgressMap(next) {
+    for (var i = 0; i < TOTAL; i++) {
+      var c = mapCells.progress[i];
+      c.classList.toggle("is-on", watched.has(i + 1));
+      c.classList.toggle("is-next", !!next && next.number === i + 1);
+    }
   }
 
   function syncRow(i) {
@@ -300,8 +335,11 @@
     $("progress-canon-text").textContent = canon + " / " + canonEpisodes.length;
     setBar("progress-all-bar", total, TOTAL);
     setBar("progress-canon-bar", canon, canonEpisodes.length);
+    $("progress-ring").style.setProperty("--p", String((total / TOTAL) * 100));
+    $("ring-value").textContent = pct + "%";
 
     var next = nextEpisode();
+    updateProgressMap(next);
     $("next-hint").textContent = next
       ? "Ep " + next.number + " · " + next.title
       : (prefs.skipFillerNext ? "All non-filler episodes watched!" : "You've watched everything!");
@@ -320,10 +358,20 @@
       toast(prefs.skipFillerNext ? "No unwatched non-filler episodes left." : "You've watched every episode!");
       return;
     }
+    jumpTo(ep);
+  }
+
+  /** Scrolls the list to an episode, adjusting filters/search if they hide it. */
+  function jumpTo(ep) {
     var i = ep.number - 1;
     if (prefs.tab !== "episodes") selectTab("episodes");
     // Make sure the target is visible: clear search / enable its type if needed.
     if (!isVisible(i)) {
+      if (prefs.hideWatched && watched.has(ep.number)) {
+        prefs.hideWatched = false;
+        $("hide-watched").checked = false;
+        savePrefs();
+      }
       if (!matchesQuery(i)) { $("search").value = ""; query = ""; }
       if (!activeTypes.has(ep.type)) {
         activeTypes.add(ep.type);
@@ -380,6 +428,9 @@
       formatDuration(watch.length * MINUTES_PER_EPISODE) + " instead of " +
       formatDuration(TOTAL * MINUTES_PER_EPISODE) + ".";
 
+    for (var i = 0; i < TOTAL; i++) {
+      mapCells.guide[i].classList.toggle("is-on", keepTypes.indexOf(EPISODES[i].type) !== -1);
+    }
     fillRanges($("guide-watch-ranges"), watchRanges);
     fillRanges($("guide-skip-ranges"), skipRanges);
     $("guide-watch-text").textContent = watchRanges.map(rangeLabel).join(", ");
@@ -711,6 +762,8 @@
     buildFilters();
     buildLegend();
     buildList();
+    buildMap($("ep-map"), mapCells.progress);
+    buildMap($("guide-map"), mapCells.guide);
     for (var i = 0; i < TOTAL; i++) syncRow(i);
 
     var search = $("search");
@@ -763,6 +816,7 @@
     initSync();
 
     if (location.protocol === "file:") $("file-note").hidden = false;
+    document.documentElement.classList.remove("js-loading"); // reveal the built page
     registerServiceWorker();
   }
 
