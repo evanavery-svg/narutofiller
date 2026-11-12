@@ -7,18 +7,18 @@
   // ---------- Constants ----------
   var TOTAL = EPISODES.length;
   var MINUTES_PER_EPISODE = 23;
+  // The site shows just two categories. data/episodes.js keeps Anime Filler List's
+  // finer types; "mixed" (and "anime-canon", of which there are none) count as canon,
+  // because those episodes adapt the manga's story.
   var TYPES = [
-    { id: "canon", label: "Canon", long: "Manga canon",
-      desc: "Adapts the manga's story. Essential viewing." },
-    { id: "mixed", label: "Mixed", long: "Mixed canon/filler",
-      desc: "Adapts manga chapters but adds a noticeable amount of anime-original material." },
+    { id: "canon", label: "Canon", long: "Canon",
+      desc: "Tells the manga's story, sometimes with a few anime-only scenes added. Watch these." },
     { id: "filler", label: "Filler", long: "Filler",
-      desc: "Anime-original story not in the manga. Safe to skip." },
-    { id: "anime-canon", label: "Anime canon", long: "Anime canon",
-      desc: "Anime-original, but treated as part of the official story. (The original Naruto series has none.)" }
+      desc: "Anime-only story that isn't in the manga. Safe to skip." }
   ];
   var TYPE_BY_ID = {};
   TYPES.forEach(function (t) { TYPE_BY_ID[t.id] = t; });
+  function kindOf(ep) { return ep.type === "filler" ? "filler" : "canon"; }
 
   var STORAGE = {
     watched: "naruto-filler:watched:v1",
@@ -48,11 +48,12 @@
     types: TYPES.map(function (t) { return t.id; }),
     hideWatched: false,
     skipFillerNext: true,
-    includeMixed: true,
     tab: "episodes"
   };
   var prefs = Object.assign({}, defaultPrefs, load(STORAGE.prefs, {}));
   var activeTypes = new Set(prefs.types.filter(function (t) { return TYPE_BY_ID[t]; }));
+  // Older versions had four types; if none of the saved ones still exist, show everything.
+  if (!activeTypes.size && prefs.types.length) activeTypes = new Set(defaultPrefs.types);
   var query = "";
 
   function savePrefs() {
@@ -136,7 +137,7 @@
   function buildFilters() {
     var wrap = $("filters");
     TYPES.forEach(function (t) {
-      var count = EPISODES.filter(function (e) { return e.type === t.id; }).length;
+      var count = EPISODES.filter(function (e) { return kindOf(e) === t.id; }).length;
       var btn = document.createElement("button");
       btn.type = "button";
       btn.className = "filter";
@@ -181,11 +182,12 @@
     var list = $("episode-list");
     var frag = document.createDocumentFragment();
     EPISODES.forEach(function (ep) {
-      var t = TYPE_BY_ID[ep.type];
+      var kind = kindOf(ep);
+      var t = TYPE_BY_ID[kind];
       var li = document.createElement("li");
       li.className = "episode";
       li.id = "ep-" + ep.number;
-      li.dataset.type = ep.type;
+      li.dataset.type = kind;
 
       var label = document.createElement("label");
       label.className = "ep-check";
@@ -209,7 +211,7 @@
       title.className = "ep-title";
       title.textContent = ep.title;
       var badge = document.createElement("span");
-      badge.className = "badge badge--" + ep.type;
+      badge.className = "badge badge--" + kind;
       badge.textContent = t.label;
       badge.title = t.long;
       main.appendChild(title);
@@ -250,9 +252,9 @@
     EPISODES.forEach(function (ep) {
       var cell = document.createElement("span");
       cell.className = "cell";
-      cell.dataset.type = ep.type;
+      cell.dataset.type = kindOf(ep);
       cell.dataset.n = ep.number;
-      cell.title = "Ep " + ep.number + " · " + ep.title + " (" + TYPE_BY_ID[ep.type].long + ")";
+      cell.title = "Ep " + ep.number + " · " + ep.title + " (" + TYPE_BY_ID[kindOf(ep)].long + ")";
       frag.appendChild(cell);
       cells.push(cell);
     });
@@ -289,7 +291,7 @@
 
   function isVisible(i) {
     var ep = EPISODES[i];
-    if (!activeTypes.has(ep.type)) return false;
+    if (!activeTypes.has(kindOf(ep))) return false;
     if (prefs.hideWatched && watched.has(ep.number)) return false;
     return matchesQuery(i);
   }
@@ -308,7 +310,7 @@
   }
 
   // ---------- Progress + next episode ----------
-  var canonEpisodes = EPISODES.filter(function (e) { return e.type === "canon"; });
+  var canonEpisodes = EPISODES.filter(function (e) { return kindOf(e) === "canon"; });
 
   function nextEpisode() {
     for (var i = 0; i < TOTAL; i++) {
@@ -373,9 +375,9 @@
         savePrefs();
       }
       if (!matchesQuery(i)) { $("search").value = ""; query = ""; }
-      if (!activeTypes.has(ep.type)) {
-        activeTypes.add(ep.type);
-        var btn = document.querySelector('.filter[data-type="' + ep.type + '"]');
+      if (!activeTypes.has(kindOf(ep))) {
+        activeTypes.add(kindOf(ep));
+        var btn = document.querySelector('.filter[data-type="' + kindOf(ep) + '"]');
         if (btn) btn.setAttribute("aria-pressed", "true");
         savePrefs();
       }
@@ -411,11 +413,9 @@
 
   // ---------- Skip-filler guide ----------
   function renderGuide() {
-    var include = prefs.includeMixed;
-    var keepTypes = include ? ["canon", "mixed", "anime-canon"] : ["canon", "anime-canon"];
     var watch = [], skip = [];
     EPISODES.forEach(function (e) {
-      (keepTypes.indexOf(e.type) !== -1 ? watch : skip).push(e.number);
+      (kindOf(e) === "canon" ? watch : skip).push(e.number);
     });
     var watchRanges = toRanges(watch);
     var skipRanges = toRanges(skip);
@@ -429,7 +429,7 @@
       formatDuration(TOTAL * MINUTES_PER_EPISODE) + ".";
 
     for (var i = 0; i < TOTAL; i++) {
-      mapCells.guide[i].classList.toggle("is-on", keepTypes.indexOf(EPISODES[i].type) !== -1);
+      mapCells.guide[i].classList.toggle("is-on", kindOf(EPISODES[i]) === "canon");
     }
     fillRanges($("guide-watch-ranges"), watchRanges);
     fillRanges($("guide-skip-ranges"), skipRanges);
@@ -791,12 +791,6 @@
     $("reset-button").addEventListener("click", function () { showResetConfirm(true); });
     $("reset-cancel").addEventListener("click", function () { showResetConfirm(false); });
     $("reset-yes").addEventListener("click", doReset);
-
-    var mixed = $("include-mixed");
-    mixed.checked = !!prefs.includeMixed;
-    mixed.addEventListener("change", function () {
-      prefs.includeMixed = mixed.checked; savePrefs(); renderGuide();
-    });
 
     // Keep tabs in sync if progress changes in another tab/window
     window.addEventListener("storage", function (e) {

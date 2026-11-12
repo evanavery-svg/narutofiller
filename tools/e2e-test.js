@@ -107,16 +107,16 @@ const collapse = (nums) => {
     const toggle = (t) => page.click(`.filter[data-type="${t}"]`);
 
     check("http: 220 episodes rendered", (await page.locator(".episode").count()) === 220);
-    check("http: legend lists 4 types", (await page.locator("#legend-list .legend-item").count()) === 4);
+    check("http: legend lists 2 categories", (await page.locator("#legend-list .legend-item").count()) === 2);
+    check("categories: only Canon and Filler filters", (await page.$$eval(".filter", (b) => b.map((x) => x.dataset.type).join(","))) === "canon,filler");
+    check("categories: a 'mixed' episode (7) shows as Canon", (await page.textContent("#ep-7 .badge")) === "Canon");
+    check("categories: filler episode (26) shows as Filler", (await page.textContent("#ep-26 .badge")) === "Filler");
     check("sync: not configured -> setup note, no buttons", (await page.locator("#sync-unavailable").isVisible()) && !(await page.locator("#sync-create").isVisible()));
 
     // Filters
     await toggle("filler");
     let v = await visibleNums();
-    check("filter: canon+mixed only (filler off)", v.length === 130 && v.every((n) => E[n - 1].type !== "filler"), v.length);
-    await toggle("mixed");
-    v = await visibleNums();
-    check("filter: canon only", v.length === 74 && v.every((n) => E[n - 1].type === "canon"), v.length);
+    check("filter: canon only (filler off)", v.length === 130 && v.every((n) => E[n - 1].type !== "filler"), v.length);
     await toggle("canon");
     check("filter: none selected shows empty state", (await visibleNums()).length === 0 && (await page.locator("#empty-state").isVisible()));
     await toggle("filler");
@@ -128,7 +128,7 @@ const collapse = (nums) => {
     v = await visibleNums();
     const expectKakashiFiller = E.filter((e) => e.type === "filler" && e.title.toLowerCase().includes("kakashi")).map((e) => e.number);
     check("search+filter: 'KAKASHI' within filler (case-insensitive)", JSON.stringify(v) === JSON.stringify(expectKakashiFiller), v.join(","));
-    await toggle("canon"); await toggle("mixed");
+    await toggle("canon");
     await page.fill("#search", "kakashi");
     v = await visibleNums();
     const expectKakashi = E.filter((e) => e.title.toLowerCase().includes("kakashi")).map((e) => e.number);
@@ -143,7 +143,7 @@ const collapse = (nums) => {
     // Watch tracker
     for (const n of [1, 2, 3, 26]) await page.check(`#ep-${n} input`);
     check("tracker: all progress 4/220", (await page.textContent("#progress-all-text")).startsWith("4 / 220"));
-    check("tracker: canon progress 3/74", (await page.textContent("#progress-canon-text")) === "3 / 74");
+    check("tracker: canon progress 3/130", (await page.textContent("#progress-canon-text")) === "3 / 130");
     check("map: 220 squares in each map", (await page.locator("#ep-map .cell").count()) === 220 && (await page.locator("#guide-map .cell").count()) === 220);
     check("map: watched squares lit", (await page.locator("#ep-map .cell.is-on").count()) === 4);
     check("map: next episode marked", (await page.getAttribute("#ep-map .cell.is-next", "data-n")) === "4");
@@ -162,7 +162,7 @@ const collapse = (nums) => {
     check("next: no skip -> ep 26", (await page.textContent("#next-hint")).startsWith("Ep 26 "));
     await page.click("#skip-filler-next + .switch-ui");
     // jump while filter hides target
-    await toggle("mixed");
+    await toggle("canon");
     await page.fill("#search", "zzz");
     await page.click("#next-button");
     await page.waitForTimeout(700);
@@ -194,18 +194,14 @@ const collapse = (nums) => {
 
     // Skip-filler guide
     await page.click("#tab-guide");
-    const watchIncl = collapse([...expand(AFL.canon), ...expand(AFL.mixed)]);
-    check("guide (incl. mixed): ranges match data", (await page.textContent("#guide-watch-text")) === watchIncl, await page.textContent("#guide-watch-text"));
-    check("guide (incl. mixed): skip ranges", (await page.textContent("#guide-skip-text")) === collapse(expand(AFL.filler)));
-    check("guide (incl. mixed): count 130", (await page.textContent("#guide-watch-count")) === "130");
+    // Canon on the site = AFL's "Manga Canon" + "Mixed Canon/Filler"
+    const watchAll = collapse([...expand(AFL.canon), ...expand(AFL.mixed)]);
+    check("guide: watch ranges match data", (await page.textContent("#guide-watch-text")) === watchAll, await page.textContent("#guide-watch-text"));
+    check("guide: skip ranges match data", (await page.textContent("#guide-skip-text")) === collapse(expand(AFL.filler)));
+    check("guide: count 130", (await page.textContent("#guide-watch-count")) === "130");
     check("guide map: 130 squares lit", (await page.locator("#guide-map .cell.is-on").count()) === 130);
-    check("guide (incl. mixed): time saved 90×23 = 34 h 30 min", (await page.textContent("#guide-time-saved")) === "~34 h 30 min");
-    await page.click("#include-mixed + .switch-ui");
-    check("guide (canon only): ranges match data", (await page.textContent("#guide-watch-text")) === collapse(expand(AFL.canon)), await page.textContent("#guide-watch-text"));
-    check("guide (canon only): count 74", (await page.textContent("#guide-watch-count")) === "74");
-    check("guide (canon only): time saved 146×23 = 55 h 58 min", (await page.textContent("#guide-time-saved")) === "~55 h 58 min");
+    check("guide: time saved 90×23 = 34 h 30 min", (await page.textContent("#guide-time-saved")) === "~34 h 30 min");
     await page.screenshot({ path: path.join(tmp, "guide-mobile.png"), fullPage: true });
-    await page.click("#include-mixed + .switch-ui");
     await page.click("#tab-episodes");
     await page.screenshot({ path: path.join(tmp, "episodes-mobile.png") });
     check("mobile: no horizontal scroll", await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));

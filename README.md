@@ -4,29 +4,29 @@ A small static website that shows which episodes of the **original _Naruto_ anim
 
 It's plain HTML, CSS and vanilla JavaScript: no frameworks, no build step, no npm.
 
-| Type | Count | Meaning |
+To keep things simple, the site sorts episodes into just two categories:
+
+| Category | Count | Meaning |
 | --- | ---: | --- |
-| **Canon** (manga canon) | 74 | Adapts the manga's story. |
-| **Mixed** (mixed canon/filler) | 56 | Adapts manga chapters but adds a noticeable amount of anime-original material. |
-| **Filler** | 90 | Anime-original story that isn't in the manga. |
-| **Anime canon** | 0 | Anime-original but treated as official story. The original series has none; the type is supported anyway. |
+| **Canon** | 130 | Tells the manga's story. Watch these. |
+| **Filler** | 90 | Anime-only story that isn't in the manga. Safe to skip. |
+
+"Canon" includes the 56 episodes that Anime Filler List calls *mixed canon/filler*: they adapt manga chapters but add some anime-only scenes. The data file still keeps Anime Filler List's finer split (74 manga canon, 56 mixed, 90 filler, 0 anime canon), so the site could show it again later.
 
 ## Features
 
-- **Episode list.** All 220 episodes, each with its number, title and a color-coded type badge. A legend explains the types.
-- **Type filters.** Toggle buttons for each type that can be combined (for example, canon + mixed only).
+- **Episode list.** All 220 episodes, each with its number, title and a green Canon or red Filler badge. A legend explains the two.
+- **Filters.** Canon and Filler toggle buttons; turn one off to see only the other.
 - **Search.** One box that matches the episode number (`135`, `#135`, `ep 135`) or any part of the title. It ignores case and updates as you type. It works together with the filters.
 - **Watch tracker.**
   - A checkbox on each episode, saved in `localStorage`.
-  - A progress ring and progress bars for all episodes (watched/220) and for canon only (watched/74).
+  - A progress ring and progress bars for all episodes (watched/220) and for canon only (watched/130).
   - An **episode map**: one square per episode, colored by type and lit up once watched, with the next episode outlined. Tap a square to jump to that episode.
   - A **Next episode to watch** button that scrolls to the first unwatched episode, with a **Skip filler** switch. If a filter or search hides that episode, the button changes them so you can see it.
   - A **Hide watched** switch.
   - **Reset progress**, which asks you to confirm first.
 - **Watch together.** Two (or more) people can share one watched list through a free Firebase database. Episodes either of you ticks show up on the other's phone within a second or two, and changes made offline sync later. It's off until you add your own Firebase project; see [Shared progress (Firebase)](#shared-progress-firebase).
-- **Skip-filler guide.** A separate tab that lists the episodes to watch, collapsed into ranges, and the episodes to skip, with a map showing which to watch. A switch includes or leaves out mixed episodes. It shows the episode count and the time saved, at about 23 minutes per episode:
-  - Including mixed: watch **1–25, 27–96, 98–100, 107–135, 141–142, 220** (130 episodes). This saves about **34 h 30 min**.
-  - Canon only: 74 episodes. This saves about **55 h 58 min**.
+- **Skip-filler guide.** A separate tab that lists the episodes to watch, collapsed into ranges, and the episodes to skip, with a map showing which to watch. Watch **1–25, 27–96, 98–100, 107–135, 141–142, 220** (130 episodes) and skip the 90 filler episodes, which saves about **34 h 30 min** at about 23 minutes per episode.
 - **PWA.** You can install it on a phone or desktop. Every file is cached on the first visit, so the whole app then works offline. When a new version is deployed, an "Update available, tap to refresh" banner appears instead of the app quietly serving old files.
 
 ## Files
@@ -165,7 +165,7 @@ From then on:
 - **Main source:** [Anime Filler List: Naruto](https://www.animefillerlist.com/shows/naruto), retrieved 2026-11-12. Every episode's number, title and type comes from its episode table. The table also matches the summary range lists at the top of the same page exactly.
 - **Cross-check:** the [Naruto Fandom wiki](https://naruto.fandom.com/wiki/List_of_Animated_Media). Each of the 220 episode pages has an infobox field (`chapters`) listing the manga chapters the episode adapts. An episode with no chapters listed is anime-original.
 
-Type mapping: *Manga Canon* → `canon`, *Mixed Canon/Filler* → `mixed`, *Filler* → `filler`, *Anime Canon* → `anime-canon`.
+Type mapping in `data/episodes.js`: *Manga Canon* → `canon`, *Mixed Canon/Filler* → `mixed`, *Filler* → `filler`, *Anime Canon* → `anime-canon`. The site then shows `filler` as **Filler** and everything else as **Canon**.
 
 To check the data file yourself, run `node tools/validate-data.js`:
 
@@ -183,7 +183,7 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
 
 **Filler vs. not filler: no disagreements.** For all 220 episodes, the 90 that Anime Filler List calls *Filler* are exactly the 90 that the Fandom wiki lists with no manga chapters. The other 130 (Canon and Mixed) all have source chapters on the wiki. That includes episode 220, which the wiki lists as adapting chapter 238 and Anime Filler List classifies as *Mixed*.
 
-**Canon vs. mixed: checked against one source only.** The Fandom wiki doesn't separate fully canon episodes from mixed ones, so that split comes from Anime Filler List alone, as the brief asked.
+**Canon vs. mixed: checked against one source only.** The Fandom wiki doesn't separate fully canon episodes from mixed ones, so that split comes from Anime Filler List alone, as the brief asked. The site now shows both as Canon, so this split only matters in the data file.
 
 **Titles: 22 episodes have different English titles.** These are translation or spelling variants, not classification differences. The site uses Anime Filler List's titles, with one exception: AFL's typo "Inheritence" in episode 91 is corrected to "Inheritance".
 
@@ -218,7 +218,7 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
 
 - **Data:** each type's episode list matches Anime Filler List's published range lists.
 - **`file://`:** the page renders, has no errors, doesn't try to register a service worker, and keeps watched episodes.
-- **Filters:** each type alone, combinations, and none selected, which shows an empty state.
+- **Filters:** canon only, filler only, and none selected, which shows an empty state.
 - **Search:** case-insensitive title matches, number matches, and search combined with the filler filter.
 - **Tracker:**
   - both progress counts
@@ -228,7 +228,8 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
   - watched episodes surviving a reload
   - reset with both confirm and cancel
 - **Episode map and ring:** the map lights up watched episodes and marks the next one, tapping a square jumps to it, and the ring shows the right percentage.
-- **Guide:** ranges, counts, time saved and the map, with and without mixed episodes.
+- **Categories:** only Canon and Filler appear, and a *mixed* episode shows as Canon.
+- **Guide:** ranges, counts, time saved and the map.
 - **PWA:**
   - the service worker registers with the subpath scope and controls the page
   - the first visit doesn't trigger an unexpected reload
@@ -260,7 +261,7 @@ It checks:
 - **Leave:** stopping sharing, and staying left after a reload.
 - **Security rules:** listing rooms, malformed codes, unexpected fields, deletes, and other collections are all refused.
 
-The last runs passed all 64 checks in `e2e-test.js` and all 31 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 99**, including "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
+The last runs passed all 63 checks in `e2e-test.js` and all 31 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 99**, including "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
 
 ## Legal
 
