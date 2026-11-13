@@ -23,7 +23,7 @@ To keep things simple, the site sorts episodes into just two categories:
 - **All / Canon / Filler.** A segmented control above the list shows everything, only canon, or only filler.
 - **Search.** One box that matches the episode number (`135`, `#135`, `ep 135`) or any part of the title. It ignores case and updates as you type. It works together with the filters.
 - **Watch tracker.**
-  - A round checkbox on each episode, saved in `localStorage`.
+  - A round checkbox on each episode, saved in `localStorage`. Tapping anywhere on the row (the number or title too) ticks it.
   - A progress bar showing "40 of 220 watched", with the canon count underneath (out of 130).
   - A **Continue** button that scrolls to the next unwatched episode. The **Skip filler when continuing** switch controls whether it skips filler. If the All / Canon / Filler control or the search hides that episode, the button changes them so you can see it.
   - **Mark Several Episodes** (in the **⋯** menu): pick a range (for example 1 to 80) and mark it all as watched or unwatched at once, optionally skipping filler. A message with **Undo** confirms it.
@@ -301,7 +301,7 @@ It checks:
 - **Leave:** stopping sharing, and staying left after a reload.
 - **Security rules:** listing rooms, malformed codes, unexpected fields, deletes, and other collections are all refused.
 
-The last runs passed all 119 checks in `e2e-test.js` and all 38 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 99** in light mode, and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
+The last runs passed all 123 checks in `e2e-test.js` and all 38 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 99** in light mode, and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
 
 ## Legal
 

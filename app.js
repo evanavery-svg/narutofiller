@@ -199,8 +199,11 @@
       li.id = "ep-" + ep.number;
       li.dataset.type = kind;
 
-      var label = document.createElement("label");
-      label.className = "ep-check";
+      // The whole row is one <label>, so tapping the number or title ticks it too
+      var row = document.createElement("label");
+      row.className = "ep-row";
+      var check = document.createElement("span");
+      check.className = "ep-check";
       var input = document.createElement("input");
       input.type = "checkbox";
       input.dataset.number = ep.number;
@@ -208,16 +211,16 @@
       var box = document.createElement("span");
       box.className = "box";
       box.innerHTML = CHECK_SVG;
-      label.appendChild(input);
-      label.appendChild(box);
+      check.appendChild(input);
+      check.appendChild(box);
 
       var num = document.createElement("span");
       num.className = "ep-number";
       num.textContent = ep.number;
 
-      var main = document.createElement("div");
+      var main = document.createElement("span");
       main.className = "ep-main";
-      var title = document.createElement("p");
+      var title = document.createElement("span");
       title.className = "ep-title";
       title.textContent = ep.title;
       main.appendChild(title);
@@ -228,9 +231,10 @@
         main.appendChild(badge);
       }
 
-      li.appendChild(label);
-      li.appendChild(num);
-      li.appendChild(main);
+      row.appendChild(check);
+      row.appendChild(num);
+      row.appendChild(main);
+      li.appendChild(row);
       frag.appendChild(li);
       rows.push({ li: li, input: input });
     });

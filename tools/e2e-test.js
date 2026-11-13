@@ -165,6 +165,16 @@ const collapse = (nums) => {
     check("search: no match shows empty state", (await visibleNums()).length === 0 && (await page.locator("#empty-state").isVisible()));
     await page.fill("#search", "");
 
+    // Tapping the episode's title (or number) ticks it too
+    await page.click("#ep-50 .ep-title");
+    check("row: tapping the title ticks the episode", await page.isChecked("#ep-50 input"));
+    await page.click("#ep-50 .ep-number");
+    check("row: tapping the number unticks it", !(await page.isChecked("#ep-50 input")));
+    await page.click("#ep-26 .badge");
+    check("row: tapping the Filler tag ticks it", await page.isChecked("#ep-26 input"));
+    await page.click("#ep-26 .ep-title");
+    check("row: progress follows row taps", (await page.textContent("#progress-all-text")) === "0 of 220");
+
     // Watch tracker
     for (const n of [1, 2, 3, 26]) await page.check(`#ep-${n} input`);
     check("tracker: progress 4 of 220", (await page.textContent("#progress-all-text")) === "4 of 220");
