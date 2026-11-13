@@ -29,6 +29,15 @@ To keep things simple, the site sorts episodes into just two categories:
   - The arc you're up to opens by itself, and finished arcs fold away.
   - Tap a section to open or close it; that choice is remembered.
   - A search opens every section with a match.
+- **Your name.** The first time the app opens, it asks for your first name. It's what the people you share a list with see. You can skip it, and change it anytime in **⋯ → Your Name**.
+- **5-star ratings and favorites** (your own, even on a shared list):
+  - After **Watched** on the up-next card, a "Rate Ep 27 ★★★★★ ♥" bar appears for a few seconds.
+  - Every episode row has an **ⓘ** button that opens its details, where you can rate it, favorite it, or change its status (Not Watched, Watched, Skipped).
+  - Rated and favorite episodes show their stars and a heart in the list, and each arc shows your average rating.
+  - **⋯ → Ratings & Favorites** lists your top-rated episodes (best first) and your favorites. Tap one to open it.
+- **Episode details.** The **ⓘ** panel shows the episode's arc, which manga chapters it adapts (or "anime-only" for filler), when it was marked watched, and, on a shared list, the other people's ratings and favorites ("Sara ★★★★★ ♥"). There are no plot summaries: the only sources are the wiki's spoiler-heavy synopses, which aren't ours to copy.
+- **Finish estimate.** Under your progress: "About 3 a day · you'll finish canon around Dec 20". It's based on the episodes you've marked one at a time in the last two weeks; **Mark Several** and other bulk changes don't count. It says "the series" instead of "canon" when **Skip filler when continuing** is off.
+- **Partner activity.** While you share a list, a small line under your progress shows what the other person watched last ("Sara watched Ep 45 · 2h ago"). Tap it to open that episode.
 - **Color-coded episodes.** Every row has a green (canon) or red (filler) stripe and episode number. Filler episodes also get a red **Filler** tag. Skipped episodes show a dash in their circle.
 - **All / Canon / Filler.** A segmented control above the list shows everything, only canon, or only filler.
 - **Search.** One box that matches the episode number (`135`, `#135`, `ep 135`) or any part of the title. It ignores case and updates as you type. It works together with the filters.
@@ -158,6 +167,16 @@ After the first visit the app works with no connection. Watched episodes are sav
 
 The config values aren't secret. Every Firebase web app sends them to the browser, so it's fine to commit them to a public repository. What protects your data is the security rules from step 3.
 
+### Updating the rules for names, ratings and activity
+
+If you set up Firebase before names and ratings were added, publish the rules once more:
+
+1. In the Firebase console, open **Firestore → Rules**.
+2. Select everything (**Ctrl+A** / **Cmd+A**) and delete it.
+3. Paste the full contents of [`firestore.rules`](firestore.rules), then click **Publish**.
+
+The new rules also allow a `members` field: each person's name, ratings, favorites and latest episode, for at most 10 people per list. Until you publish them, the watched list keeps syncing, but names, ratings and activity aren't shared. **Watch Together** shows a short note about it.
+
 ### Using it
 
 1. On your phone, open the site and tap **⋯ → Watch Together → Create List**. Anything you've already ticked goes into the new list.
@@ -173,7 +192,8 @@ The config values aren't secret. Every Firebase web app sends them to the browse
 
 From then on:
 
-- Ticks, unticks and **Reset progress** show up on both devices, usually within a second or two. Reset clears the list for everyone, and its confirm message says so.
+- Each person's name, star ratings, favorites and latest episode are shared too. Ratings stay per person: you see the other's next to yours in an episode's **ⓘ** details, and "Sara watched Ep 45" shows under your progress.
+- Ticks, unticks, skips and **Reset progress** show up on both devices, usually within a second or two. Reset clears the list for everyone, and its confirm message says so.
 - The status dot shows **Synced**, **Saving…**, or **Offline · will sync later**.
 - If you tick episodes with no connection, or even close the app before reconnecting, the changes are saved on the phone and sent the next time it opens online. When both people changed the same episode, the most recent change wins.
 - **Leave** (tap twice) stops sharing on that device. Your progress stays, but later ticks are no longer shared. You'll need the code to rejoin.
@@ -192,6 +212,8 @@ From then on:
 
 - **Main source:** [Anime Filler List: Naruto](https://www.animefillerlist.com/shows/naruto), retrieved 2026-11-12. Every episode's number, title and type comes from its episode table. The table also matches the summary range lists at the top of the same page exactly.
 - **Cross-check:** the [Naruto Fandom wiki](https://naruto.fandom.com/wiki/List_of_Animated_Media). Each of the 220 episode pages has an infobox field (`chapters`) listing the manga chapters the episode adapts. An episode with no chapters listed is anime-original.
+
+**Manga chapters** for each episode also come from the Fandom wiki (each episode page's `chapters` field). The 90 filler episodes have none.
 
 **Arcs** come from the Fandom wiki: each episode page names its arc. Names are shortened ("Chūnin Exams (Arc)" → "Chūnin Exams", "Prologue — Land of Waves" → "Land of Waves"). The 14 episodes with no arc listed are grouped as "Standalone". A section counts as a filler arc when most of its episodes are filler. Three mixed episodes sit at the start of filler arcs: 141 (Land of Rice Fields Investigation Mission), 142 (Mizuki Tracking Mission) and 220 (Sunagakure Support Mission).
 
@@ -287,6 +309,18 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
   - rejecting numbers outside 1–220
   - changes surviving a reload
 - **Light and dark mode:** the page follows the device setting.
+- **Your name:**
+  - the first launch asks for it, and **Not Now** isn't asked again
+  - **⋯ → Your Name** changes it
+  - on a new phone opening an invite, the name comes first, then the install steps
+- **Ratings, favorites and details:**
+  - the **ⓘ** button opens details without ticking the row
+  - stars show on the row and as the arc average, and tapping the same star clears it
+  - favorites show a heart, and the status can be changed from the panel
+  - filler shows "anime-only"
+  - **Ratings & Favorites** sorts best first, and everything survives a reload
+  - the "Rate Ep N" bar appears after **Watched** and goes away after rating
+- **Finish estimate:** it appears after a few episodes marked one at a time, but not after **Mark Several** alone.
 - **Guide:** ranges, counts, time saved and the map, and tapping a square jumps to that episode.
 - **PWA:**
   - the service worker registers with the subpath scope and controls the page
@@ -325,12 +359,17 @@ It checks:
 
 - **Create and join:** creating a list; joining through an invite link, and by pasting a code or the whole link into **Join with a Code**; the two devices' existing progress being merged; error messages for unknown and badly formed codes.
 - **Shared label and banner:** the **Shared** label appears on the main screen and opens Watch Together, and the invitation banner shows until you join.
+- **People:**
+  - each device's name, and what each person watched last, reaches the other device
+  - ratings and favorites stay per person, and each sees the other's on the episode details
+  - a name change reaches the other device
+  - the rules refuse lists with more than 10 people
 - **Live sync:** ticks and unticks going both ways, skipping from the up-next card (and **Undo**) reaching the other device, marking several episodes and **Undo** reaching the other device, and reset clearing the other device.
 - **Offline:** changes made offline converging with the other device's changes after reconnecting, including a change made offline just before the app was closed.
 - **Leave:** stopping sharing, and staying left after a reload.
 - **Security rules:** listing rooms, malformed codes, unexpected fields, deletes, and other collections are all refused.
 
-The last runs passed all 146 checks in `e2e-test.js` and all 40 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 99** in light mode, and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
+The last runs passed all 174 checks in `e2e-test.js` and all 46 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 99** in light mode, and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
 
 ## Legal
 

@@ -59,7 +59,22 @@
       </div>
       <div class="progress-track"><div id="progress-canon-bar" class="progress-bar" role="progressbar" aria-label="Canon episodes watched" aria-valuemin="0" aria-valuemax="130" aria-valuenow="0"></div></div>
       <p id="progress-all-text" class="progress-sub">0 of 220 total</p>
+      <p id="pace-text" class="progress-sub pace" hidden></p>
+      <button type="button" id="partner-line" class="partner-line" hidden>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c.7-3.6 3.5-5.6 7-5.6s6.3 2 7 5.6"/></svg>
+        <span id="partner-text"></span>
+      </button>
     </section>
+
+    <!-- Appears after "Watched" on the card -->
+    <div id="rate-prompt" class="rate-prompt" hidden>
+      <span id="rate-text" class="rate-text"></span>
+      <div id="rate-stars" class="stars"></div>
+      <button type="button" id="rate-fav" class="fav-icon" aria-pressed="false" aria-label="Favorite">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.3s-7.6-4.6-9-9.3C2 7.6 4.3 4.7 7.4 4.7c1.9 0 3.5 1.1 4.6 2.6 1.1-1.5 2.7-2.6 4.6-2.6 3.1 0 5.4 2.9 4.4 6.3-1.4 4.7-9 9.3-9 9.3z"/></svg>
+      </button>
+      <button type="button" id="rate-close" class="rate-close" aria-label="Dismiss"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
 
     <!-- Up next: one card at a time -->
     <section id="deck" class="deck" aria-label="Up next">
@@ -128,6 +143,11 @@
           <span class="row-label">Skip-Filler Guide</span>
           <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
         </button>
+        <button type="button" id="menu-top" class="row row-button">
+          <span class="row-icon yellow"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.3l2.6 5.5 6 .7-4.4 4.1 1.1 6L12 16.7l-5.3 2.9 1.1-6L3.4 9.5l6-.7z"/></svg></span>
+          <span class="row-label">Ratings &amp; Favorites</span>
+          <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
         <button type="button" id="menu-sync" class="row row-button">
           <span class="row-icon blue"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c.6-3.3 3-5 6-5s5.4 1.7 6 5"/><circle cx="17" cy="9" r="2.6"/><path d="M16.5 14c2.5 0 4 1.5 4.5 4.5"/></svg></span>
           <span class="row-label">Watch Together</span>
@@ -142,6 +162,11 @@
       </div>
 
       <div class="group">
+        <button type="button" id="menu-name" class="row row-button">
+          <span class="row-label">Your Name</span>
+          <span id="menu-name-value" class="row-value"></span>
+          <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
         <label class="row">
           <span class="row-label">Skip filler when continuing</span>
           <input type="checkbox" id="skip-filler-next" class="switch" role="switch">
@@ -238,8 +263,74 @@
         </div>
       </div>
 
+      <p class="sync-text sync-you"><span id="sync-you"></span> <button type="button" id="sync-name" class="link-button">Change</button></p>
+      <p id="sync-members-note" class="footnote" hidden>Names, ratings and activity can't be shared yet: the list's Firestore security rules need updating. See “Shared progress (Firebase)” in the README. Your watched list still syncs.</p>
       <p id="sync-message" class="sync-message" hidden></p>
     </div>
+  </dialog>
+
+  <!-- ===== Episode details ===== -->
+  <dialog id="ep-sheet" class="sheet" aria-labelledby="ep-sheet-title">
+    <div class="sheet-inner">
+      <div class="sheet-head">
+        <h2 id="ep-sheet-title" class="sheet-title" tabindex="-1">Episode</h2>
+        <span id="ep-sheet-kind" class="kind-pill" data-kind="canon"></span>
+        <button type="button" class="sheet-close" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+      <p id="ep-sheet-name" class="ep-sheet-name"></p>
+      <div class="segmented ep-state" id="ep-sheet-state" role="radiogroup" aria-label="Status">
+        <button type="button" role="radio" data-state="none">Not Watched</button>
+        <button type="button" role="radio" data-state="watched">Watched</button>
+        <button type="button" role="radio" data-state="skipped">Skipped</button>
+      </div>
+      <div class="group padded rating-box">
+        <div class="rating-line">
+          <span class="row-label">Your rating</span>
+          <div id="ep-sheet-stars" class="stars big"></div>
+        </div>
+        <button type="button" id="ep-sheet-fav" class="fav-button" aria-pressed="false">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.3s-7.6-4.6-9-9.3C2 7.6 4.3 4.7 7.4 4.7c1.9 0 3.5 1.1 4.6 2.6 1.1-1.5 2.7-2.6 4.6-2.6 3.1 0 5.4 2.9 4.4 6.3-1.4 4.7-9 9.3-9 9.3z"/></svg>
+          <span id="ep-sheet-fav-label">Add to Favorites</span>
+        </button>
+      </div>
+      <div id="ep-sheet-partners" class="group" hidden></div>
+      <div class="group">
+        <div class="row"><span class="row-label">Arc</span><span id="ep-sheet-arc" class="row-value"></span></div>
+        <div class="row"><span class="row-label">Manga</span><span id="ep-sheet-chapters" class="row-value"></span></div>
+        <div class="row" id="ep-sheet-date-row"><span class="row-label">Marked watched</span><span id="ep-sheet-date" class="row-value"></span></div>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- ===== Ratings & favorites ===== -->
+  <dialog id="top-sheet" class="sheet tall" aria-labelledby="top-title">
+    <div class="sheet-inner">
+      <div class="sheet-head">
+        <h2 id="top-title" class="sheet-title" tabindex="-1">Ratings &amp; Favorites</h2>
+        <button type="button" class="sheet-close" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+      <h3 class="sheet-subtitle">Top Rated</h3>
+      <div id="top-rated" class="group"></div>
+      <p id="top-rated-empty" class="footnote empty-note">No ratings yet. Rate an episode after you watch it, or from its details (the ⓘ button in the list).</p>
+      <h3 class="sheet-subtitle">Favorites</h3>
+      <div id="fav-list" class="group"></div>
+      <p id="fav-empty" class="footnote empty-note">No favorites yet. Tap the heart on an episode to add it.</p>
+    </div>
+  </dialog>
+
+  <!-- ===== Your name (asked on first launch) ===== -->
+  <dialog id="welcome-sheet" class="sheet" aria-labelledby="welcome-title">
+    <form id="welcome-form" class="sheet-inner welcome" novalidate>
+      <span class="app-mark welcome-mark" aria-hidden="true"></span>
+      <h2 id="welcome-title" class="sheet-title" tabindex="-1">Welcome!</h2>
+      <p id="welcome-text" class="welcome-text"></p>
+      <label class="visually-hidden" for="welcome-name">Your first name</label>
+      <input id="welcome-name" class="text-field" type="text" maxlength="30" autocomplete="given-name" placeholder="Your first name" enterkeyhint="done">
+      <div class="button-stack">
+        <button type="submit" id="welcome-save" class="button-filled">Continue</button>
+        <button type="button" id="welcome-skip" class="button-plain">Not Now</button>
+      </div>
+    </form>
   </dialog>
 
   <!-- ===== Mark several episodes at once ===== -->

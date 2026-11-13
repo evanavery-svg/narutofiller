@@ -25,6 +25,9 @@
     prefs: "naruto-filler:prefs:v1",
     changed: "naruto-filler:changed:v1", // { episodeNumber: last-change time in ms }
     skipped: "naruto-filler:skipped:v1", // episodes skipped from the up-next deck
+    ratings: "naruto-filler:ratings:v1", // { episodeNumber: 1–5 stars } (yours)
+    favorites: "naruto-filler:favorites:v1", // [episodeNumber] (yours)
+    profile: "naruto-filler:profile:v1", // { id, name, asked, last: { n, at } }
     room: "naruto-filler:room:v1"        // shared list code, if any
   };
 
@@ -81,6 +84,81 @@
   }
   function stateOf(n) { return watched.has(n) ? "watched" : skipped.has(n) ? "skipped" : "none"; }
   function entryOf(n, t) { return { w: watched.has(n), s: skipped.has(n), t: t }; }
+
+  // ---------- You: name, star ratings, favorites ----------
+  function randomId(len) {
+    var abc = "abcdefghijklmnopqrstuvwxyz0123456789", bytes = new Uint8Array(len), out = "";
+    window.crypto.getRandomValues(bytes);
+    for (var i = 0; i < len; i++) out += abc[bytes[i] % abc.length];
+    return out;
+  }
+  var profile = load(STORAGE.profile, null) || {};
+  if (!/^[a-z0-9]{12}$/.test(profile.id || "")) profile.id = randomId(12);
+  if (typeof profile.name !== "string") profile.name = "";
+  save(STORAGE.profile, profile);
+  function saveProfile() { save(STORAGE.profile, profile); pushMember(); }
+
+  var ratings = (function () {
+    var raw = load(STORAGE.ratings, {}) || {}, out = {};
+    Object.keys(raw).forEach(function (k) {
+      var n = Number(k), r = raw[k];
+      if (n >= 1 && n <= TOTAL && Number.isInteger(r) && r >= 1 && r <= 5) out[n] = r;
+    });
+    return out;
+  })();
+  var favorites = loadNumbers(STORAGE.favorites);
+  function savePersonal() {
+    save(STORAGE.ratings, ratings);
+    save(STORAGE.favorites, sorted(favorites));
+    pushMember();
+  }
+  function setRating(n, stars) {
+    if (stars) ratings[n] = stars; else delete ratings[n];
+    savePersonal();
+    refreshPersonal(n);
+  }
+  function toggleFavorite(n) {
+    if (favorites.has(n)) favorites.delete(n); else favorites.add(n);
+    savePersonal();
+    refreshPersonal(n);
+  }
+  /** Remembers the last episode you yourself marked watched (shown to your partner). */
+  function noteWatched(n) {
+    profile.last = { n: n, at: Date.now() };
+    saveProfile();
+  }
+
+  /** Your pace: episodes marked one at a time in the last two weeks (bulk marks share
+   *  one timestamp, so groups of 3+ identical times are left out). */
+  function paceInfo() {
+    var DAY = 864e5, now = Date.now(), byTime = {};
+    watched.forEach(function (n) {
+      var t = changedAt[n];
+      if (t && now - t < 14 * DAY) (byTime[t] = byTime[t] || []).push(n);
+    });
+    var times = [];
+    Object.keys(byTime).forEach(function (t) { if (byTime[t].length < 3) byTime[t].forEach(function () { times.push(Number(t)); }); });
+    if (times.length < 2) return null;
+    var days = Math.min(14, Math.max(3, (now - Math.min.apply(null, times)) / DAY));
+    var perDay = times.length / days;
+    var remaining = upcoming(TOTAL).length;
+    if (!remaining) return null;
+    return { perDay: perDay, remaining: remaining, finish: new Date(now + Math.ceil(remaining / perDay) * DAY) };
+  }
+  function formatDate(d) {
+    var opts = { month: "short", day: "numeric" };
+    if (d.getFullYear() !== new Date().getFullYear()) opts.year = "numeric";
+    return d.toLocaleDateString(undefined, opts);
+  }
+  function timeAgo(at) {
+    var m = Math.round((Date.now() - at) / 60000);
+    if (m < 1) return "just now";
+    if (m < 60) return m + " min ago";
+    var h = Math.round(m / 60);
+    if (h < 24) return h + "h ago";
+    var d = Math.round(h / 24);
+    return d === 1 ? "yesterday" : d + " days ago";
+  }
 
   // When each episode was last ticked/unticked on this device (or by a shared-list
   // partner). Used to merge shared lists: the most recent change to an episode wins.
@@ -216,6 +294,9 @@
   var arcOf = []; // episode index -> arc
   arcs.forEach(function (a) { a.numbers.forEach(function (n) { arcOf[n - 1] = a; }); });
 
+  var INFO_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.4"/></svg>';
+  var STAR_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.3l2.6 5.5 6 .7-4.4 4.1 1.1 6L12 16.7l-5.3 2.9 1.1-6L3.4 9.5l6-.7z"/></svg>';
+  var HEART_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.3s-7.6-4.6-9-9.3C2 7.6 4.3 4.7 7.4 4.7c1.9 0 3.5 1.1 4.6 2.6 1.1-1.5 2.7-2.6 4.6-2.6 3.1 0 5.4 2.9 4.4 6.3-1.4 4.7-9 9.3-9 9.3z"/></svg>';
   var CHEVRON_SVG = '<svg class="arc-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
 
   function buildRow(ep) {
@@ -257,11 +338,24 @@
       main.appendChild(badge);
     }
 
+    var meta = document.createElement("span");
+    meta.className = "ep-meta";
+
     row.appendChild(check);
     row.appendChild(num);
     row.appendChild(main);
+    row.appendChild(meta);
     li.appendChild(row);
-    rows.push({ li: li, input: input });
+
+    var info = document.createElement("button");
+    info.type = "button";
+    info.className = "ep-info";
+    info.dataset.n = ep.number;
+    info.setAttribute("aria-label", "Details for episode " + ep.number);
+    info.innerHTML = INFO_SVG;
+    li.appendChild(info);
+
+    rows.push({ li: li, input: input, meta: meta });
     return li;
   }
 
@@ -308,9 +402,14 @@
       section.appendChild(head);
       section.appendChild(list);
       frag.appendChild(section);
-      a.el = section; a.head = head; a.list = list; a.progress = progress;
+      a.el = section; a.head = head; a.list = list; a.progress = progress; a.meta = meta; a.metaBase = meta.textContent;
     });
     container.appendChild(frag);
+
+    container.addEventListener("click", function (e) {
+      var info = e.target.closest && e.target.closest(".ep-info");
+      if (info) openEpSheet(Number(info.dataset.n));
+    });
 
     // One delegated listener for all checkboxes
     container.addEventListener("change", function (e) {
@@ -319,6 +418,7 @@
       var n = Number(input.dataset.number);
       setState(n, input.checked ? "watched" : "none");
       recordChanges([n]);
+      if (input.checked) noteWatched(n);
       syncRow(n - 1);
       if (input.checked) pop(input.nextElementSibling);
       updateProgress();
@@ -372,6 +472,11 @@
     rows[i].input.checked = watched.has(n);
     rows[i].li.classList.toggle("is-watched", watched.has(n));
     rows[i].li.classList.toggle("is-skipped", skipped.has(n));
+    var meta = "";
+    if (ratings[n]) meta += '<span class="meta-stars">' + STAR_SVG + ratings[n] + "</span>";
+    if (favorites.has(n)) meta += '<span class="meta-fav" title="Favorite">' + HEART_SVG + "</span>";
+    rows[i].meta.innerHTML = meta; // fixed markup + numbers only
+    rows[i].meta.setAttribute("aria-label", (ratings[n] ? ratings[n] + " stars" : "") + (favorites.has(n) ? (ratings[n] ? ", " : "") + "favorite" : ""));
   }
 
   // ---------- Filtering + search ----------
@@ -415,6 +520,9 @@
       var done = a.numbers.every(function (n) { return watched.has(n) || skipped.has(n); });
       a.progress.textContent = done ? "Done" : w + "/" + a.numbers.length;
       a.el.classList.toggle("is-done", done);
+      var rated = a.numbers.filter(function (n) { return ratings[n]; });
+      var avg = rated.length ? rated.reduce(function (sum, n) { return sum + ratings[n]; }, 0) / rated.length : 0;
+      a.meta.textContent = a.metaBase + (avg ? " · ★ " + avg.toFixed(1) : "");
     });
   }
 
@@ -450,6 +558,13 @@
     $("progress-all-text").textContent = total + " of " + TOTAL + " total" +
       (skipped.size ? " · " + skipped.size + " skipped" : "");
     setBar("progress-canon-bar", canon, canonEpisodes.length);
+    var pace = paceInfo();
+    $("pace-text").hidden = !pace;
+    if (pace) {
+      var per = pace.perDay >= 1 ? String(Math.round(pace.perDay)) : pace.perDay.toFixed(1);
+      $("pace-text").textContent = "About " + per + " a day · you'll finish " +
+        (prefs.skipFillerNext ? "canon" : "the series") + " around " + formatDate(pace.finish);
+    }
     updateArcProgress();
     renderDeck();
     if (rows.length === TOTAL && arcs[0].el) applyFilters(); // the current arc may have changed
@@ -503,8 +618,10 @@
     setTimeout(function () {
       setState(n, state);
       recordChanges([n]);
+      if (state === "watched") noteWatched(n);
       syncRow(n - 1);
       card.classList.remove("fly-right", "fly-left");
+      showRatePrompt(state === "watched" ? n : 0);
       deckBusy = false;
       updateProgress();
       applyFilters();
@@ -572,6 +689,214 @@
     showResetConfirm(false, true);
     closeDialog($("menu-sheet"));
     toast("Progress reset");
+  }
+
+  // ---------- Stars ----------
+  function buildStars(el, label, onPick) {
+    el.setAttribute("role", "group");
+    el.setAttribute("aria-label", label);
+    for (var i = 1; i <= 5; i++) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "star";
+      b.dataset.v = i;
+      b.setAttribute("aria-label", i + " star" + (i > 1 ? "s" : ""));
+      b.innerHTML = STAR_SVG;
+      el.appendChild(b);
+    }
+    el.addEventListener("click", function (e) {
+      var b = e.target.closest(".star");
+      if (b) onPick(Number(b.dataset.v));
+    });
+  }
+  function renderStars(el, value) {
+    Array.prototype.forEach.call(el.children, function (b) {
+      var v = Number(b.dataset.v);
+      b.classList.toggle("on", v <= value);
+      b.setAttribute("aria-pressed", String(v === value));
+    });
+  }
+  function starText(v) { return "★★★★★".slice(0, v) + "☆☆☆☆☆".slice(0, 5 - v); }
+  /** Tapping the current rating again clears it. */
+  function pickRating(n, v) { setRating(n, ratings[n] === v ? 0 : v); }
+
+  /** Updates everything that shows one episode's rating/favorite. */
+  function refreshPersonal(n) {
+    if (rows.length === TOTAL) syncRow(n - 1);
+    updateArcProgress();
+    if ($("top-sheet").open) renderTop();
+    if (epSheet.n === n) renderEpSheet();
+    if (ratePrompt.n === n) renderRatePrompt();
+  }
+
+  // ---------- "How was it?" after Watched ----------
+  var ratePrompt = { n: 0, timer: null };
+  function showRatePrompt(n) {
+    clearTimeout(ratePrompt.timer);
+    ratePrompt.n = n;
+    $("rate-prompt").hidden = !n;
+    if (!n) return;
+    renderRatePrompt();
+    ratePrompt.timer = setTimeout(function () { showRatePrompt(0); }, 20000);
+  }
+  function renderRatePrompt() {
+    var n = ratePrompt.n;
+    if (!n) return;
+    $("rate-text").textContent = "Rate Ep " + n;
+    renderStars($("rate-stars"), ratings[n] || 0);
+    $("rate-fav").setAttribute("aria-pressed", String(favorites.has(n)));
+  }
+  function initRatePrompt() {
+    buildStars($("rate-stars"), "Rate this episode", function (v) {
+      var n = ratePrompt.n;
+      if (!n) return;
+      pickRating(n, v);
+      clearTimeout(ratePrompt.timer);
+      ratePrompt.timer = setTimeout(function () { showRatePrompt(0); }, 1500);
+    });
+    $("rate-fav").addEventListener("click", function () { if (ratePrompt.n) toggleFavorite(ratePrompt.n); });
+    $("rate-close").addEventListener("click", function () { showRatePrompt(0); });
+  }
+
+  // ---------- Episode details ----------
+  var epSheet = { n: 0 };
+  function openEpSheet(n) {
+    epSheet.n = n;
+    renderEpSheet();
+    openDialog($("ep-sheet"));
+  }
+  function renderEpSheet() {
+    var n = epSheet.n;
+    if (!n) return;
+    var ep = EPISODES[n - 1], kind = kindOf(ep);
+    $("ep-sheet-title").textContent = "Episode " + n;
+    $("ep-sheet-kind").textContent = kind === "filler" ? "Filler" : "Canon";
+    $("ep-sheet-kind").dataset.kind = kind;
+    $("ep-sheet-name").textContent = ep.title;
+    $("ep-sheet-arc").textContent = ep.arc;
+    $("ep-sheet-chapters").textContent = ep.chapters ? (ep.chapters.indexOf(",") === -1 ? "Chapter " : "Chapters ") + ep.chapters : "None (anime-only)";
+    var when = watched.has(n) && changedAt[n];
+    $("ep-sheet-date-row").hidden = !when;
+    if (when) $("ep-sheet-date").textContent = formatDate(new Date(changedAt[n]));
+    var state = stateOf(n);
+    Array.prototype.forEach.call($("ep-sheet-state").children, function (b) {
+      b.setAttribute("aria-checked", String(b.dataset.state === state));
+    });
+    renderStars($("ep-sheet-stars"), ratings[n] || 0);
+    $("ep-sheet-fav").setAttribute("aria-pressed", String(favorites.has(n)));
+    $("ep-sheet-fav-label").textContent = favorites.has(n) ? "Favorite" : "Add to Favorites";
+
+    var box = $("ep-sheet-partners");
+    box.textContent = "";
+    partners().forEach(function (m) {
+      if (!m.r[n] && !m.f[n]) return;
+      var row = document.createElement("div");
+      row.className = "row";
+      var name = document.createElement("span");
+      name.className = "row-label";
+      name.textContent = m.name;
+      var val = document.createElement("span");
+      val.className = "row-value partner-rating";
+      val.textContent = (m.r[n] ? starText(m.r[n]) : "") + (m.f[n] ? "  ♥" : "");
+      val.setAttribute("aria-label", (m.r[n] ? m.r[n] + " stars" : "No rating") + (m.f[n] ? ", favorite" : ""));
+      row.appendChild(name);
+      row.appendChild(val);
+      box.appendChild(row);
+    });
+    box.hidden = !box.children.length;
+  }
+  function initEpSheet() {
+    buildStars($("ep-sheet-stars"), "Your rating", function (v) { pickRating(epSheet.n, v); });
+    $("ep-sheet-fav").addEventListener("click", function () { toggleFavorite(epSheet.n); });
+    Array.prototype.forEach.call($("ep-sheet-state").children, function (b) {
+      b.addEventListener("click", function () {
+        var n = epSheet.n;
+        if (stateOf(n) === b.dataset.state) return;
+        setState(n, b.dataset.state);
+        recordChanges([n]);
+        if (b.dataset.state === "watched") noteWatched(n);
+        syncRow(n - 1);
+        updateProgress();
+        applyFilters();
+        renderEpSheet();
+      });
+    });
+    $("partner-line").addEventListener("click", function () { openEpSheet(Number($("partner-line").dataset.n)); });
+    setInterval(renderPartner, 60000); // keep "2h ago" current
+  }
+
+  // ---------- Ratings & Favorites ----------
+  function topItem(n, extra) {
+    var ep = EPISODES[n - 1];
+    var b = document.createElement("button");
+    b.type = "button";
+    b.className = "row row-button top-item";
+    b.dataset.type = kindOf(ep);
+    var num = document.createElement("span");
+    num.className = "ep-number";
+    num.textContent = n;
+    var title = document.createElement("span");
+    title.className = "row-label";
+    title.textContent = ep.title;
+    var val = document.createElement("span");
+    val.className = "row-value top-value";
+    val.textContent = extra;
+    b.appendChild(num);
+    b.appendChild(title);
+    b.appendChild(val);
+    b.addEventListener("click", function () { openEpSheet(n); });
+    return b;
+  }
+  function renderTop() {
+    var rated = Object.keys(ratings).map(Number).sort(function (a, b) { return ratings[b] - ratings[a] || a - b; });
+    $("top-rated").textContent = "";
+    rated.forEach(function (n) { $("top-rated").appendChild(topItem(n, "★ " + ratings[n])); });
+    $("top-rated").hidden = !rated.length;
+    $("top-rated-empty").hidden = !!rated.length;
+    var favs = sorted(favorites);
+    $("fav-list").textContent = "";
+    favs.forEach(function (n) { $("fav-list").appendChild(topItem(n, "♥")); });
+    $("fav-list").hidden = !favs.length;
+    $("fav-empty").hidden = !!favs.length;
+  }
+
+  // ---------- Your name (asked on first launch) ----------
+  var welcome = { queued: [] };
+  function openWelcome(editing) {
+    $("welcome-title").textContent = editing ? "Your Name" : "Welcome!";
+    $("welcome-text").textContent = editing
+      ? "This is the name the people you share your list with see."
+      : "What's your first name? It's shown to the people you share your watch list with.";
+    $("welcome-skip").textContent = editing ? "Cancel" : "Not Now";
+    $("welcome-name").value = profile.name || "";
+    openDialog($("welcome-sheet"), $("welcome-name"));
+  }
+  /** Runs fn now, or once the welcome screen has been answered. */
+  function afterWelcome(fn) {
+    if ($("welcome-sheet").open) welcome.queued.push(fn); else fn();
+  }
+  function renderName() { $("menu-name-value").textContent = profile.name || "Add"; }
+  function initWelcome() {
+    $("welcome-form").addEventListener("submit", function (e) {
+      e.preventDefault();
+      profile.name = $("welcome-name").value.trim().slice(0, 30);
+      saveProfile();
+      renderName();
+      renderSync();
+      if (profile.name) toast("Hi, " + profile.name + "!");
+      closeDialog($("welcome-sheet"));
+    });
+    $("welcome-skip").addEventListener("click", function () { closeDialog($("welcome-sheet")); });
+    $("welcome-sheet").addEventListener("close", function () {
+      if (!profile.asked) { profile.asked = true; saveProfile(); }
+      var q = welcome.queued; welcome.queued = [];
+      q.forEach(function (fn) { fn(); });
+    });
+    $("welcome-sheet").querySelector(".welcome-mark").innerHTML = document.querySelector(".app-mark").innerHTML;
+    $("menu-name").addEventListener("click", function () { openWelcome(true); });
+    $("sync-name").addEventListener("click", function () { openWelcome(true); });
+    renderName();
+    if (!profile.asked) openWelcome(false);
   }
 
   // ---------- Mark several episodes at once ----------
@@ -705,6 +1030,7 @@
     });
     $("menu-bulk").addEventListener("click", openBulk);
     $("menu-guide").addEventListener("click", function () { openDialog($("guide-sheet")); });
+    $("menu-top").addEventListener("click", function () { renderTop(); openDialog($("top-sheet")); });
     $("menu-sync").addEventListener("click", openSyncSheet);
     $("sync-chip").addEventListener("click", openSyncSheet);
     $("invite-banner").addEventListener("click", openSyncSheet);
@@ -793,6 +1119,59 @@
     return toPush;
   }
 
+  // ---------- People on the shared list ----------
+  var members = {};          // everyone else: id -> { name, r: {n: stars}, f: {n: true}, last: {n, at} }
+  var membersBlocked = false; // the database refused our details (security rules need updating)
+
+  function memberPayload() {
+    var r = {}, f = {};
+    Object.keys(ratings).forEach(function (n) { r[n] = ratings[n]; });
+    favorites.forEach(function (n) { f[n] = true; });
+    var out = { name: (profile.name || "").trim().slice(0, 30) || "Someone", r: r, f: f };
+    if (profile.last && profile.last.n) out.last = { n: profile.last.n, at: profile.last.at };
+    return out;
+  }
+  function pushMember() {
+    if (sync.controller && sync.controller.pushMember) sync.controller.pushMember(profile.id, memberPayload());
+  }
+  function applyMembers(all) {
+    var next = {};
+    Object.keys(all || {}).forEach(function (id) {
+      var m = all[id];
+      if (id === profile.id || !m || typeof m !== "object") return;
+      var clean = { name: typeof m.name === "string" && m.name.trim() ? m.name.trim().slice(0, 30) : "Someone", r: {}, f: {}, last: null };
+      if (m.r && typeof m.r === "object") Object.keys(m.r).forEach(function (k) {
+        var n = Number(k), v = m.r[k];
+        if (n >= 1 && n <= TOTAL && Number.isInteger(v) && v >= 1 && v <= 5) clean.r[n] = v;
+      });
+      if (m.f && typeof m.f === "object") Object.keys(m.f).forEach(function (k) {
+        var n = Number(k);
+        if (n >= 1 && n <= TOTAL && m.f[k] === true) clean.f[n] = true;
+      });
+      if (m.last && Number.isInteger(m.last.n) && m.last.n >= 1 && m.last.n <= TOTAL && typeof m.last.at === "number") {
+        clean.last = { n: m.last.n, at: m.last.at };
+      }
+      next[id] = clean;
+    });
+    members = next;
+    membersBlocked = false;
+    renderPartner();
+    if (epSheet.n) renderEpSheet();
+  }
+  function memberError() { membersBlocked = true; renderSync(); }
+  function partners() { return Object.keys(members).map(function (id) { return members[id]; }); }
+
+  /** "Sara watched Ep 45 · 2h ago" under your progress, while sharing. */
+  function renderPartner() {
+    var line = $("partner-line");
+    var latest = sync.roomId && partners().filter(function (m) { return m.last; })
+      .sort(function (a, b) { return b.last.at - a.last.at; })[0];
+    line.hidden = !latest;
+    if (!latest) return;
+    line.dataset.n = latest.last.n;
+    $("partner-text").textContent = latest.name + " watched Ep " + latest.last.n + " · " + timeAgo(latest.last.at);
+  }
+
   var STATUS_TEXT = {
     connecting: "Connecting…",
     synced: "Synced",
@@ -835,6 +1214,8 @@
     $("invite-banner").hidden = !inviting;
     if (!inRoom) $("menu-sync-status").textContent = !available ? "Not set up" : inviting ? "Invited" : "Off";
     if (inRoom) $("sync-code-display").textContent = prettyCode(sync.roomId);
+    $("sync-you").textContent = profile.name ? "You appear as " + profile.name + "." : "Add your name so the others know it's you.";
+    $("sync-members-note").hidden = !(inRoom && membersBlocked);
     if (inviting) {
       $("sync-invite-text").textContent = (sync.roomId ? "Switch to the shared list " : "Join the shared list ") +
         prettyCode(sync.inviteRoom) + "? Your progress on this device will be merged into it.";
@@ -872,6 +1253,8 @@
         api: {
           allEntries: allEntries,
           applyRemote: applyRemote,
+          applyMembers: function (all) { if (sync.roomId === roomId || !connected) applyMembers(all); },
+          memberError: memberError,
           status: function (s, msg) {
             lastStatus = [s, msg];
             if (connected && sync.roomId === roomId) setSyncStatus(s, msg);
@@ -886,6 +1269,7 @@
       connected = true;
       save(STORAGE.room, roomId);
       renderSync();
+      pushMember();
       setSyncStatus(lastStatus[0], lastStatus[1]);
       if (mode === "create") toast("Shared list created. Tap Invite to share it.");
       if (mode === "join") toast("Joined the shared list");
@@ -914,6 +1298,9 @@
     sync.controller = null;
     sync.roomId = null;
     sync.leaveArmed = false;
+    members = {};
+    membersBlocked = false;
+    renderPartner();
     save(STORAGE.room, null);
     renderSync();
     toast("Left the shared list. Your progress stays on this device.");
@@ -945,8 +1332,10 @@
     if (code === sync.roomId) { toast("You're already on this shared list"); return; }
     sync.inviteRoom = code;
     if (!syncAvailable()) return;
-    if (platform.mobile && !isInstalled()) openInstallSheet(code);
-    else openSyncSheet();
+    afterWelcome(function () {
+      if (platform.mobile && !isInstalled()) openInstallSheet(code);
+      else openSyncSheet();
+    });
   }
 
   function acceptInvite(code) {
@@ -1057,7 +1446,10 @@
     applyFilters();
     updateProgress();
     renderGuide();
+    initRatePrompt();
+    initEpSheet();
     initInstall();
+    initWelcome();
     initSync();
 
     if (location.protocol === "file:") $("file-note").hidden = false;

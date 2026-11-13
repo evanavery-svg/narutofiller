@@ -2,9 +2,12 @@
  * Loaded on demand by app.js (dynamic import) only when a shared list is in use.
  *
  * Data: one document per shared list, rooms/{ROOMCODE}:
- *   { eps: { "12": { w: true, t: 1731400000000 }, ... }, updatedAt: <server time> }
- * w = watched, t = when it was last changed (ms). Each episode resolves
- * last-change-wins, so devices that were offline merge cleanly when they reconnect.
+ *   { eps: { "12": { w: true, s: false, t: 1731400000000 }, ... },
+ *     members: { "<memberId>": { name, r: { "12": 4 }, f: { "12": true }, last: { n: 12, at: <ms> } } },
+ *     updatedAt: <server time> }
+ * eps is the shared watched list: w = watched, s = skipped, t = when it last changed (ms).
+ * Each episode resolves last-change-wins, so offline devices merge cleanly.
+ * members holds each person's own name, star ratings (r), favorites (f) and latest episode.
  */
 const SDK = "https://www.gstatic.com/firebasejs/12.19.0/";
 
@@ -45,8 +48,10 @@ function withTimeout(promise, ms, code) {
  * @param {object} opts.api      callbacks into app.js:
  *   allEntries() -> { n: {w,t} } for every episode with a value
  *   applyRemote(eps) -> { n: {w,t} } entries where this device is newer (to upload)
+ *   applyMembers(members)    everyone's names, ratings, favorites and latest episode
+ *   memberError(err)         this person's details couldn't be saved (e.g. old security rules)
  *   status(state, message)   state: connecting | synced | saving | offline | error
- * @returns {Promise<{ push(entries): void, stop(): void }>}
+ * @returns {Promise<{ push(entries): void, pushMember(id, data): void, stop(): void }>}
  */
 export async function connect({ config, roomId, mode, api }) {
   api.status("connecting");
@@ -80,6 +85,18 @@ export async function connect({ config, roomId, mode, api }) {
       .catch((err) => api.status("error", describeError(err)));
   }
 
+  // This person's own details: replaced as a whole, separately from the watched list
+  let memberTimer = null;
+  function pushMember(id, data) {
+    if (stopped || !/^[a-z0-9]{6,40}$/.test(id)) return;
+    clearTimeout(memberTimer);
+    memberTimer = setTimeout(() => {
+      if (stopped) return;
+      fs.setDoc(ref, { members: { [id]: data }, updatedAt: fs.serverTimestamp() }, { mergeFields: ["members." + id, "updatedAt"] })
+        .catch((err) => { if (api.memberError) api.memberError(err); });
+    }, 400);
+  }
+
   function push(entries) {
     if (stopped || !entries) return;
     const keys = Object.keys(entries);
@@ -97,6 +114,7 @@ export async function connect({ config, roomId, mode, api }) {
       return;
     }
     push(api.applyRemote(snap.get("eps") || {}));
+    if (api.applyMembers) api.applyMembers(snap.get("members") || {});
     api.status(meta.hasPendingWrites || flushTimer ? "saving" : meta.fromCache ? "offline" : "synced");
   }, (err) => {
     api.status("error", describeError(err));
@@ -104,9 +122,11 @@ export async function connect({ config, roomId, mode, api }) {
 
   return {
     push,
+    pushMember,
     stop() {
       stopped = true;
       clearTimeout(flushTimer);
+      clearTimeout(memberTimer);
       unsubscribe();
     }
   };

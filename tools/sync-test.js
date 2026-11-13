@@ -65,6 +65,11 @@ async function waitFor(fn, timeout = 8000) {
   const browser = await chromium.launch();
   async function device(name) {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    // Each device already has a name (skips the first-launch screen)
+    await context.addInitScript((who) => {
+      const key = "naruto-filler:profile:v1";
+      if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({ id: (who.toLowerCase() + "xxxxxxxxxxxx").slice(0, 12), name: who, asked: true }));
+    }, name === "A" ? "Ana" : "Ben");
     await context.addInitScript((host) => { window.NF_FIRESTORE_EMULATOR = host; }, EMULATOR);
     if (process.env.FIREBASE_SDK_DIR) {
       await context.route(`https://www.gstatic.com/firebasejs/${SDK_VERSION}/*`, (route) => {
@@ -125,6 +130,34 @@ async function waitFor(fn, timeout = 8000) {
     check("join: B has A's progress merged with its own", same(await waitFor(async () => { const w = await watchedOf(B.page); return same(w, [1, 2, 3, 10]) && w; }), [1, 2, 3, 10]), (await watchedOf(B.page)).join(","));
     check("join: A receives B's progress live", same(await waitFor(async () => { const w = await watchedOf(A.page); return same(w, [1, 2, 3, 10]) && w; }), [1, 2, 3, 10]), (await watchedOf(A.page)).join(","));
 
+    // Names and activity
+    check("people: B sees what Ana watched last", (await waitFor(async () => (await B.page.isVisible("#partner-line")) && (await B.page.textContent("#partner-text")).startsWith("Ana watched Ep 3"), 10000)) === true, await B.page.textContent("#partner-text"));
+    check("people: A sees what Ben watched last", (await waitFor(async () => (await A.page.textContent("#partner-text")).startsWith("Ben watched Ep 10"), 10000)) === true, await A.page.textContent("#partner-text"));
+    // Ratings and favorites are per person; each sees the other's
+    await closeSheets(A.page);
+    await A.page.click("#ep-1 .ep-info");
+    await A.page.click('#ep-sheet-stars .star[data-v="4"]');
+    await A.page.click("#ep-sheet-fav");
+    await closeSheets(A.page);
+    await closeSheets(B.page);
+    await waitFor(async () => {
+      await B.page.click("#ep-1 .ep-info");
+      const t = await B.page.textContent("#ep-sheet-partners");
+      await closeSheets(B.page);
+      return t.includes("Ana") && t.includes("★★★★☆");
+    }, 10000);
+    await B.page.click("#ep-1 .ep-info");
+    const partnerRow = await B.page.textContent("#ep-sheet-partners");
+    check("people: B sees Ana's rating and favorite on ep 1", partnerRow.includes("Ana") && partnerRow.includes("★★★★☆") && partnerRow.includes("♥"), partnerRow);
+    check("people: B's own rating is separate (none yet)", (await B.page.textContent("#ep-1 .ep-meta")) === "");
+    await closeSheets(B.page);
+    // Changing your name shows up for the others
+    await B.page.click("#menu-open");
+    await B.page.click("#menu-name");
+    await B.page.fill("#welcome-name", "Benji");
+    await B.page.click("#welcome-save");
+    check("people: name change reaches A", (await waitFor(async () => (await A.page.textContent("#partner-text")).startsWith("Benji"), 10000)) === true, await A.page.textContent("#partner-text"));
+
     // Live changes both ways
     await tick(A.page, 4);
     await untick(B.page, 2);
@@ -136,7 +169,7 @@ async function waitFor(fn, timeout = 8000) {
     // Marking several at once (and Undo) syncs too
     check("chip: A shows 'Shared' on the main screen", (await A.page.textContent("#sync-chip")) === "Shared" && await A.page.isVisible("#sync-chip"));
     check("chip: invite banner gone after joining", !(await B.page.isVisible("#invite-banner")));
-    check("menu: Watch Together shows 'Synced'", (await A.page.textContent("#menu-sync-status")) === "Synced");
+    check("menu: Watch Together shows 'Synced'", (await waitFor(async () => (await A.page.textContent("#menu-sync-status")) === "Synced", 10000)) === true, await A.page.textContent("#menu-sync-status"));
     await closeSheets(A.page);
     await openMenu(A.page);
     await A.page.click("#menu-bulk");
@@ -227,6 +260,10 @@ async function waitFor(fn, timeout = 8000) {
     check("rules: unexpected fields are denied", extra.status === 403, extra.status);
     const del = await fetch(`${api}/rooms/${code}`, { method: "DELETE" });
     check("rules: deleting a room is denied", del.status === 403, del.status);
+    const crowd = {};
+    for (let i = 0; i < 11; i++) crowd["member" + i] = { mapValue: { fields: { name: { stringValue: "x" } } } };
+    const tooMany = await fetch(`${api}/rooms/${code}?updateMask.fieldPaths=members`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ fields: { members: { mapValue: { fields: crowd } } } }) });
+    check("rules: more than 10 people on a list is denied", tooMany.status === 403, tooMany.status);
     const other = await fetch(`${api}/other/doc`);
     check("rules: other collections are closed", other.status === 403, other.status);
 

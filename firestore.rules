@@ -14,11 +14,14 @@ service cloud.firestore {
       return id.matches('^[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{16}$');
     }
 
+    // eps: the shared watched list. members: each person's name, ratings, favorites
+    // and latest episode (at most 10 people per list).
     function validRoom() {
       let data = request.resource.data;
-      return data.keys().hasOnly(['eps', 'updatedAt'])
+      return data.keys().hasOnly(['eps', 'updatedAt', 'members'])
         && data.eps is map
         && data.eps.size() <= 220
+        && (!('members' in data) || (data.members is map && data.members.size() <= 10))
         && data.updatedAt == request.time;
     }
 

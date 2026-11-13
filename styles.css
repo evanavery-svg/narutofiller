@@ -207,7 +207,8 @@ label.row { cursor: pointer; }
   flex: none; width: 29px; height: 29px; border-radius: 7px; display: grid; place-items: center; color: #fff;
 }
 .row-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.row-icon.orange { background: #ff9500; } .row-icon.green { background: #34c759; }
+.row-icon.orange { background: #ff9500; } .row-icon.yellow { background: #ffcc00; }
+.row-icon.yellow svg { fill: currentColor; stroke: none; } .row-icon.green { background: #34c759; }
 .row-icon.blue { background: #007aff; } .row-icon.gray { background: #8e8e93; }
 .row-icon.green svg { fill: currentColor; stroke: none; }
 .row .row-label { flex: 1 1 auto; }
@@ -267,6 +268,36 @@ label.row { cursor: pointer; }
 .progress-sub { margin: 6px 0 0; color: var(--secondary); font-size: 13px; font-variant-numeric: tabular-nums; }
 .progress-track { height: 6px; margin: 8px 0 0; border-radius: 3px; background: var(--fill); overflow: hidden; }
 .progress-bar { height: 100%; width: 0; border-radius: 3px; background: var(--accent); transition: width 0.5s cubic-bezier(.2, .8, .2, 1); }
+
+.pace { color: var(--label); }
+.partner-line {
+  display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 4px 10px 4px 8px;
+  border: 0; border-radius: 99px; background: var(--fill); color: var(--label); font-size: 13px; font-weight: 500;
+}
+.partner-line svg { width: 16px; height: 16px; fill: none; stroke: var(--accent-text); stroke-width: 2; stroke-linecap: round; }
+
+/* ---------- Stars, hearts ---------- */
+.stars { display: inline-flex; gap: 2px; }
+.star { width: 34px; height: 34px; display: grid; place-items: center; border: 0; padding: 0; background: none; color: var(--tertiary); }
+.star svg { width: 24px; height: 24px; fill: currentColor; transition: transform 0.15s; }
+.star.on { color: #ffb800; }
+.star:active svg { transform: scale(1.2); }
+.stars.big .star { width: 40px; height: 40px; }
+.stars.big .star svg { width: 30px; height: 30px; }
+.fav-icon { width: 36px; height: 36px; display: grid; place-items: center; border: 0; background: none; color: var(--tertiary); }
+.fav-icon svg, .fav-button svg { width: 22px; height: 22px; fill: currentColor; }
+.fav-icon[aria-pressed="true"], .fav-button[aria-pressed="true"] { color: #ff2d55; }
+
+.rate-prompt {
+  display: flex; align-items: center; gap: 4px;
+  margin: 0 0 12px; padding: 6px 6px 6px 14px; border-radius: var(--radius); background: var(--surface);
+  animation: toast-in 0.25s ease-out;
+}
+.rate-text { flex: 1 1 auto; min-width: 0; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rate-prompt .star { width: 30px; height: 30px; }
+.rate-prompt .star svg { width: 22px; height: 22px; }
+.rate-close { width: 30px; height: 30px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--fill); color: var(--secondary); }
+.rate-close svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 3; stroke-linecap: round; }
 
 /* ---------- Up-next deck ---------- */
 .deck { position: relative; margin: 0 0 30px; padding-bottom: 14px; }
@@ -360,7 +391,17 @@ label.row { cursor: pointer; }
 .arc-episodes { list-style: none; margin: 0; padding: 0; border-top: 0.5px solid var(--separator); }
 
 /* ---------- Episode list ---------- */
-.episode { position: relative; transition: background 0.2s; box-shadow: inset 4px 0 0 var(--canon); }
+.episode { position: relative; display: flex; align-items: center; transition: background 0.2s; box-shadow: inset 4px 0 0 var(--canon); }
+.episode .ep-row { flex: 1 1 auto; min-width: 0; padding-right: 4px; }
+.ep-info { flex: none; width: 44px; height: 44px; margin-right: 4px; display: grid; place-items: center; border: 0; background: none; color: var(--tertiary); border-radius: 50%; }
+.ep-info svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+@media (hover: hover) { .ep-info:hover { color: var(--accent-text); background: var(--fill); } }
+.ep-meta { flex: none; display: inline-flex; align-items: center; gap: 6px; color: var(--secondary); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ep-meta:empty { display: none; }
+.ep-meta svg { width: 13px; height: 13px; fill: currentColor; vertical-align: -1px; }
+.meta-stars { display: inline-flex; align-items: center; gap: 2px; }
+.meta-stars svg { color: #ffb800; }
+.meta-fav svg { color: #ff2d55; }
 .episode[data-type="filler"] { box-shadow: inset 4px 0 0 var(--filler); }
 .ep-row {
   display: flex; align-items: center; gap: 10px;
@@ -409,6 +450,40 @@ label.row { cursor: pointer; }
 
 .reset-confirm { padding: 14px 16px; display: grid; gap: 12px; }
 .reset-confirm p { margin: 0; font-size: 15px; }
+
+/* ---------- Episode details ---------- */
+.kind-pill {
+  flex: none; padding: 3px 10px; border-radius: 99px; font-size: 13px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; color: #fff;
+  background: #1b7f3f;
+}
+.kind-pill[data-kind="filler"] { background: #c8221d; }
+.ep-sheet-name { margin: -6px 0 16px; font-family: var(--font-display); font-size: 22px; line-height: 1.25; font-weight: 700; }
+.ep-state { margin-bottom: 12px; }
+.rating-box { display: grid; gap: 6px; }
+.rating-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.fav-button { justify-self: start; display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 6px 12px 6px 8px; border: 0; border-radius: 10px; background: var(--fill); color: var(--secondary); font-size: 15px; font-weight: 600; }
+.fav-button[aria-pressed="true"] { background: color-mix(in srgb, #ff2d55 14%, transparent); }
+.fav-button[aria-pressed="true"] span { color: var(--label); }
+.partner-rating { color: #b37f00; letter-spacing: 0.05em; }
+@media (prefers-color-scheme: dark) { .partner-rating { color: #ffcc00; } }
+.sheet .row .row-value { text-align: right; }
+
+/* ---------- Ratings & favorites list ---------- */
+.top-item .ep-number { min-width: 2em; text-align: left; }
+.top-item[data-type="filler"] .ep-number { color: var(--filler-text); }
+.top-item .row-label { color: var(--label) !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.top-value { flex: none; font-weight: 600; }
+.empty-note { margin: 0 4px 6px; }
+
+/* ---------- Welcome (your name) ---------- */
+.welcome { text-align: center; display: grid; justify-items: center; gap: 10px; }
+.welcome-mark { width: 64px; height: 64px; border-radius: 15px; margin-top: 6px; }
+.welcome .sheet-title { font-size: 26px; }
+.welcome-text { margin: 0 0 6px; font-size: 15px; color: var(--secondary); max-width: 32ch; }
+.welcome .text-field { width: 100%; text-align: center; }
+.welcome .button-stack { width: 100%; margin-top: 4px; }
+.link-button { border: 0; background: none; padding: 0; color: var(--accent-text); font-size: inherit; font-weight: 600; }
+.sync-you { color: var(--secondary); }
 
 /* ---------- Watch together ---------- */
 .sync .sync-text { margin: 0 0 16px; font-size: 15px; line-height: 1.45; }

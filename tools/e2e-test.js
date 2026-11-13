@@ -20,6 +20,13 @@ const PORT = 8765;
 const BASE = `http://localhost:${PORT}/naruto-filler/`;
 
 let failures = 0;
+// Most checks start past the first-launch "what's your name?" screen
+const presetProfile = () => {
+  try {
+    const key = "naruto-filler:profile:v1";
+    if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({ id: "testtesttest", name: "Tester", asked: true }));
+  } catch (e) { /* file:// may not allow it before load */ }
+};
 async function waitFor(fn, timeout = 8000) {
   const end = Date.now() + timeout;
   let last;
@@ -79,6 +86,7 @@ const collapse = (nums) => {
     // ================= file:// =================
     {
       const page = await browser.newPage();
+      await page.addInitScript(presetProfile);
       const errors = [];
       page.on("pageerror", (e) => errors.push(e.message));
       page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
@@ -99,6 +107,7 @@ const collapse = (nums) => {
 
     // ================= http (features) =================
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    await context.addInitScript(presetProfile);
     const page = await context.newPage();
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
@@ -342,7 +351,89 @@ const collapse = (nums) => {
     check("theme: light mode", (await bgOf("light")) === "rgb(242, 242, 247)", await bgOf("light"));
     check("theme: dark mode", (await bgOf("dark")) === "rgb(0, 0, 0)", await bgOf("dark"));
     await page.emulateMedia({ colorScheme: "light" });
+    // Episode details, ratings, favorites
+    await expandAllArcs();
+    await page.click("#ep-1 .ep-info");
+    check("details: ⓘ opens episode 1", await isOpen("ep-sheet") && (await page.textContent("#ep-sheet-title")) === "Episode 1");
+    check("details: arc and manga chapter", (await page.textContent("#ep-sheet-arc")) === "Land of Waves" && (await page.textContent("#ep-sheet-chapters")) === "Chapter 1");
+    check("details: tapping ⓘ doesn't tick the row", !(await page.isChecked("#ep-1 input")));
+    await page.click('#ep-sheet-stars .star[data-v="4"]');
+    check("rating: row shows 4 stars", (await page.textContent("#ep-1 .ep-meta")).includes("4"));
+    check("rating: arc shows your average", (await page.textContent("#arc-0 .arc-meta")).includes("★ 4.0"), await page.textContent("#arc-0 .arc-meta"));
+    await page.click('#ep-sheet-stars .star[data-v="4"]');
+    check("rating: tapping the same star clears it", (await page.textContent("#ep-1 .ep-meta")) === "");
+    await page.click('#ep-sheet-stars .star[data-v="3"]');
+    await page.click("#ep-sheet-fav");
+    check("favorite: heart on the row", (await page.locator("#ep-1 .meta-fav").count()) === 1 && (await page.getAttribute("#ep-sheet-fav", "aria-pressed")) === "true");
+    await page.click('#ep-sheet-state [data-state="skipped"]');
+    check("details: status → Skipped", (await page.locator("#ep-1.is-skipped").count()) === 1);
+    await page.click('#ep-sheet-state [data-state="watched"]');
+    check("details: status → Watched, with the date", await page.isChecked("#ep-1 input") && await page.isVisible("#ep-sheet-date-row"));
+    await page.click('#ep-sheet-state [data-state="none"]');
+    await page.keyboard.press("Escape");
+    await page.click("#ep-26 .ep-info");
+    check("details: filler episode says anime-only", (await page.textContent("#ep-sheet-chapters")) === "None (anime-only)" && (await page.textContent("#ep-sheet-kind")) === "Filler");
+    await page.click('#ep-sheet-stars .star[data-v="5"]');
+    await page.keyboard.press("Escape");
+    await openMenu();
+    await page.click("#menu-top");
+    const top = await page.$$eval("#top-rated .top-item .ep-number", (els) => els.map((e) => e.textContent));
+    check("top rated: highest first", JSON.stringify(top) === '["26","1"]', top.join(","));
+    check("favorites: listed", (await page.$$eval("#fav-list .top-item .ep-number", (els) => els.map((e) => e.textContent))).join(",") === "1");
+    await page.click("#top-rated .top-item");
+    check("top rated: tapping opens details", await isOpen("ep-sheet") && (await page.textContent("#ep-sheet-title")) === "Episode 26");
+    await page.keyboard.press("Escape");
+    await page.reload();
+    check("rating + favorite: saved", (await page.textContent("#ep-26 .ep-meta")).includes("5") && (await page.locator("#ep-1 .meta-fav").count()) === 1);
+
+    // "Rate Ep N" after Watched on the card
+    const deckN = Number((await page.textContent("#deck-num")).replace(/\D/g, ""));
+    await page.click("#deck-watch");
+    await waitFor(() => page.isVisible("#rate-prompt"), 3000);
+    check("rate prompt: appears after Watched", (await page.textContent("#rate-text")) === "Rate Ep " + deckN);
+    await page.click('#rate-stars .star[data-v="5"]');
+    check("rate prompt: rating saved", (await page.textContent(`#ep-${deckN} .ep-meta`)).includes("5"));
+    await page.waitForTimeout(1800);
+    check("rate prompt: goes away after rating", !(await page.isVisible("#rate-prompt")));
+    // Pace: several episodes marked one at a time → finish estimate
+    check("pace: no estimate from a single episode", !(await page.isVisible("#pace-text")));
+    for (let i = 0; i < 2; i++) { await page.click("#deck-watch"); await page.waitForTimeout(400); }
+    check("pace: finish estimate shown", (await page.isVisible("#pace-text")) && (await page.textContent("#pace-text")).includes("a day"), await page.textContent("#pace-text"));
+
     check("mobile: no horizontal scroll", await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+
+    // First launch: asks for your name (fresh browser, no saved data)
+    {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+      const p = await ctx.newPage();
+      await p.goto(BASE);
+      check("welcome: asks for your name on first launch", await p.evaluate(() => document.getElementById("welcome-sheet").open));
+      await p.fill("#welcome-name", "Evan");
+      await p.click("#welcome-save");
+      check("welcome: closes and greets you", !(await p.evaluate(() => document.getElementById("welcome-sheet").open)) && (await p.textContent("#toast")).includes("Hi, Evan"));
+      await p.reload();
+      check("welcome: not asked again", !(await p.evaluate(() => document.getElementById("welcome-sheet").open)));
+      await p.click("#menu-open");
+      check("welcome: name shown in the menu", (await p.textContent("#menu-name-value")) === "Evan");
+      await p.click("#menu-name");
+      check("welcome: menu opens it to change the name", (await p.inputValue("#welcome-name")) === "Evan" && (await p.textContent("#welcome-title")) === "Your Name");
+      await p.fill("#welcome-name", "E");
+      await p.click("#welcome-save");
+      await p.click("#menu-open");
+      check("welcome: changed name saved", (await p.textContent("#menu-name-value")) === "E");
+      await p.click("#menu-bulk");
+      await p.fill("#bulk-to", "30");
+      await p.click("#bulk-watch");
+      check("pace: Mark Several doesn't count toward your pace", !(await p.isVisible("#pace-text")));
+      await ctx.close();
+      const ctx2 = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+      const p2 = await ctx2.newPage();
+      await p2.goto(BASE);
+      await p2.click("#welcome-skip");
+      await p2.reload();
+      check("welcome: Not Now isn't asked again", !(await p2.evaluate(() => document.getElementById("welcome-sheet").open)));
+      await ctx2.close();
+    }
 
     // ================= PWA =================
     await page.reload();
@@ -429,11 +520,18 @@ const collapse = (nums) => {
     const { devices } = require("playwright");
     for (const [name, dev] of [["iPhone", devices["iPhone 13"]], ["Android", devices["Pixel 7"]]]) {
       const ctx = await browser.newContext({ ...dev, serviceWorkers: "block" });
+      if (name === "Android") await ctx.addInitScript(presetProfile);
       const p = await ctx.newPage();
       const errs = [];
       p.on("pageerror", (e) => errs.push(e.message));
       await p.goto(BASE2 + "#join=" + CODE);
       await p.waitForTimeout(500);
+      if (name === "iPhone") { // a brand-new phone: name first, then the install steps
+        check("install (iPhone): asks for a name first", await p.evaluate(() => document.getElementById("welcome-sheet").open) && !(await p.evaluate(() => document.getElementById("install-sheet").open)));
+        await p.fill("#welcome-name", "Sara");
+        await p.click("#welcome-save");
+        await p.waitForTimeout(300);
+      }
       check(`install (${name}): invite link opens the instructions`, await p.evaluate(() => document.getElementById("install-sheet").open));
       check(`install (${name}): shows the code`, (await p.textContent("#install-code")) === "KFMQ-K7JP-AQ9N-CBG8");
       const steps = await p.$$eval("#install-steps li", (els) => els.map((e) => e.textContent));
@@ -462,6 +560,7 @@ const collapse = (nums) => {
     }
     {
       const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: "block" });
+      await ctx.addInitScript(presetProfile);
       const p = await ctx.newPage();
       await p.goto(BASE2 + "#join=" + CODE);
       await p.waitForTimeout(500);
