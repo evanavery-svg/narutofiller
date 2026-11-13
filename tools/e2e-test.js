@@ -415,6 +415,15 @@ const collapse = (nums) => {
     }
     check("pace: finish estimate shown", (await page.isVisible("#pace-text")) && (await page.textContent("#pace-text")).includes("a day"), await page.textContent("#pace-text"));
 
+    // Share this app: copies the app's address (no share sheet in desktop Chromium)
+    await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(BASE).origin });
+    await openMenu();
+    check("share app: in the menu", await page.isVisible("#menu-share-app"));
+    await page.click("#menu-share-app");
+    await waitFor(async () => (await page.textContent("#toast")).includes("Link copied"), 3000);
+    check("share app: copies the app's link", (await page.evaluate(() => navigator.clipboard.readText())) === BASE && (await page.textContent("#toast")).includes(BASE), await page.textContent("#toast"));
+    await closeSheets();
+
     // Animations
     check("animations: page marked ready for entrance animations", await page.evaluate(() => document.documentElement.classList.contains("ready")));
     await show("filler");

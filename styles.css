@@ -254,7 +254,7 @@ label.row { cursor: pointer; }
   flex: none; width: 29px; height: 29px; border-radius: 7px; display: grid; place-items: center; color: #fff;
 }
 .row-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.row-icon.orange { background: #ff9500; } .row-icon.yellow { background: #ffcc00; } .row-icon.purple { background: #af52de; }
+.row-icon.orange { background: #ff9500; } .row-icon.yellow { background: #ffcc00; } .row-icon.purple { background: #af52de; } .row-icon.teal { background: #30b0c7; }
 .row-icon.yellow svg { fill: currentColor; stroke: none; } .row-icon.green { background: #34c759; }
 .row-icon.blue { background: #007aff; } .row-icon.gray { background: #8e8e93; }
 .row-icon.green svg { fill: currentColor; stroke: none; }

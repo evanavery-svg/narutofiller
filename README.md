@@ -85,6 +85,7 @@ To keep things simple, the site sorts episodes into just two categories:
 - **Skip-filler guide.** A separate page (in the **⋯** menu) that lists the episodes to watch, collapsed into ranges, and the episodes to skip, with a map showing which to watch. Watch **1–25, 27–96, 98–100, 107–135, 141–142, 220** (130 episodes) and skip the 90 filler episodes, which saves about **34 h 30 min** at about 23 minutes per episode.
 - **PWA.** You can install it on a phone or desktop. Every file is saved on the first visit, so the whole app then works offline.
 - **Get the app.** **Get the App** in the **⋯** menu shows step-by-step install instructions for the device you're on (iPhone/iPad, Android or desktop). They also pop up by themselves when someone opens a Watch together invite link on a phone.
+- **Share This App** (**⋯** menu). On a phone it opens the share sheet with the app's link; on a computer it copies the link. It shares the address the app is opened from, or https://evanavery-svg.github.io/narutofiller/ when it's opened as a local file (set as `APP_URL` in `app.js`).
 - **Version number.** The bottom of the page shows the version (currently **0.1**). It's plain text in `index.html`.
 - **Always up to date.** Whenever there's a connection, every open of the site or app loads the newest version, and the app checks again each time you switch back to it. There's no "update available" step. Offline, it uses the last saved copy.
 
@@ -443,7 +444,7 @@ It checks:
 - **Leave:** stopping sharing, and staying left after a reload.
 - **Security rules:** listing rooms, malformed codes, unexpected fields, deletes, and other collections are all refused.
 
-The last runs passed all 213 checks in `e2e-test.js` and all 60 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 95** in light mode (performance was 97–99 before the startup animation, which covers the first two seconds), and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
+The last runs passed all 215 checks in `e2e-test.js` and all 60 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 95** in light mode (performance was 97–99 before the startup animation, which covers the first two seconds), and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
 
 ## Legal
 

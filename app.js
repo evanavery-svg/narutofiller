@@ -1839,6 +1839,28 @@
     toast("Left the shared list. Your progress stays on this device.");
   }
 
+  // ---------- Share this app ----------
+  var APP_URL = "https://evanavery-svg.github.io/narutofiller/";
+  /** The app's address: wherever it's being served from, or the public site when opened as a file. */
+  function appLink() {
+    if (!/^https?:$/.test(location.protocol)) return APP_URL;
+    return location.origin + location.pathname.replace(/index\.html$/, "");
+  }
+  function shareApp() {
+    var url = appLink();
+    var text = "Which Naruto episodes are filler? This app tracks canon vs filler and what you've watched.";
+    if (navigator.share) {
+      navigator.share({ title: "Naruto Filler Guide", text: text, url: url }).catch(function () {});
+    } else if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(
+        function () { toast("Link copied: " + url); },
+        function () { window.prompt("Copy this link:", url); }
+      );
+    } else {
+      window.prompt("Copy this link:", url);
+    }
+  }
+
   function shareInvite() {
     var url = inviteLink(sync.roomId);
     var text = "Join my Naruto watch list. Code: " + prettyCode(sync.roomId);
@@ -2138,6 +2160,7 @@
       updateGetApp();
       toast("Installed! Open Naruto Filler from your home screen.");
     });
+    $("menu-share-app").addEventListener("click", shareApp);
     $("menu-get-app").addEventListener("click", function () {
       if (installPrompt && !platform.mobile) { $("install-native").click(); return; }
       openInstallSheet(sync.inviteRoom);
