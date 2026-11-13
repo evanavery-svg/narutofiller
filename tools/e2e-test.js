@@ -20,6 +20,12 @@ const PORT = 8765;
 const BASE = `http://localhost:${PORT}/naruto-filler/`;
 
 let failures = 0;
+async function waitFor(fn, timeout = 8000) {
+  const end = Date.now() + timeout;
+  let last;
+  while (Date.now() < end) { last = await fn(); if (last) return last; await new Promise((r) => setTimeout(r, 200)); }
+  return last;
+}
 function check(name, cond, extra) {
   console.log(`${cond ? "PASS" : "FAIL"}  ${name}${extra !== undefined ? "  — " + extra : ""}`);
   if (!cond) failures++;
@@ -243,20 +249,93 @@ const collapse = (nums) => {
     check("offline: icons served from cache", iconOk);
     await context.setOffline(false);
 
-    // Update flow: publish a new version, expect banner, click it, expect reload on new cache
+    // Always up to date: a deployed change shows on the next open, with no version bump
+    const marker = "UPDATE-MARKER-" + Date.now();
+    const htmlPath = path.join(site, "index.html");
+    const originalHtml = fs.readFileSync(htmlPath, "utf8");
+    // python's http.server only has 1-second Last-Modified precision: give each edit a distinct time
+    const touch = (file, ahead) => { const t = Date.now() / 1000 + ahead; fs.utimesSync(file, t, t); };
+    fs.writeFileSync(htmlPath, originalHtml.replace("Original series", marker + " Original series"));
+    touch(htmlPath, 10);
+    await page.goto(BASE);
+    check("update: next open shows the newest files", (await page.textContent(".subtitle")).includes(marker));
+    check("update: watched state kept", await page.locator("#ep-10 input").isChecked());
+    await context.setOffline(true);
+    await page.reload();
+    check("update: offline open uses the newest saved copy", (await page.textContent(".subtitle")).includes(marker));
+    await context.setOffline(false);
+
+    // Returning to the app: the service worker reports whether anything changed
+    const askSw = () => page.evaluate(() => new Promise((resolve) => {
+      const ch = new MessageChannel();
+      ch.port1.onmessage = (e) => resolve(e.data && e.data.changed);
+      navigator.serviceWorker.controller.postMessage({ type: "CHECK_UPDATES" }, [ch.port2]);
+    }));
+    check("update check: nothing changed -> false", (await askSw()) === false);
+    fs.writeFileSync(htmlPath, originalHtml);
+    touch(htmlPath, 20);
+    check("update check: file changed on the server -> true", (await askSw()) === true);
+    check("update check: after saving, no change -> false", (await askSw()) === false);
+
+    // A new service worker takes over by itself (no "update available" step)
     const swPath = path.join(site, "service-worker.js");
     fs.writeFileSync(swPath, fs.readFileSync(swPath, "utf8").replace(`"${SW_VERSION}"`, '"v-update-test"'));
     await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
-    await page.waitForSelector("#update-banner:not([hidden])", { timeout: 10000 }).catch(() => {});
-    check("update: banner shown", await page.locator("#update-banner").isVisible());
-    await page.screenshot({ path: path.join(tmp, "update-banner.png") });
-    await Promise.all([page.waitForEvent("load", { timeout: 10000 }).catch(() => {}), page.click("#update-button")]);
-    await page.waitForTimeout(500);
-    const keysAfter = await page.evaluate(() => caches.keys());
-    check("update: reloaded onto new cache, old cache deleted", keysAfter.length === 1 && keysAfter[0] === "naruto-filler-v-update-test", keysAfter.join(","));
-    check("update: watched state kept", await page.locator("#ep-10 input").isChecked());
+    const keysAfter = await waitFor(async () => {
+      const k = await page.evaluate(() => caches.keys());
+      return k.length === 1 && k[0] === "naruto-filler-v-update-test" ? k : null;
+    }, 10000);
+    check("update: new service worker activates by itself, old cache deleted", !!keysAfter, JSON.stringify(await page.evaluate(() => caches.keys())));
 
     check("http: no JS/console errors", errors.length === 0, errors.join(" | "));
+    // ================= Install instructions =================
+    // A second copy with a (demo) Firebase config, so invite links are active. Nothing connects.
+    const site2 = path.join(tmp, "naruto-filler-cfg");
+    fs.mkdirSync(site2);
+    for (const f of FILES) fs.cpSync(path.join(ROOT, f), path.join(site2, f), { recursive: true });
+    fs.writeFileSync(path.join(site2, "firebase-config.js"), 'const FIREBASE_CONFIG = { apiKey: "demo", projectId: "demo-naruto-filler", appId: "demo" };\n');
+    const BASE2 = `http://localhost:${PORT}/naruto-filler-cfg/`;
+    const CODE = "KFMQK7JPAQ9NCBG8";
+    const { devices } = require("playwright");
+    for (const [name, dev] of [["iPhone", devices["iPhone 13"]], ["Android", devices["Pixel 7"]]]) {
+      const ctx = await browser.newContext({ ...dev, serviceWorkers: "block" });
+      const p = await ctx.newPage();
+      const errs = [];
+      p.on("pageerror", (e) => errs.push(e.message));
+      await p.goto(BASE2 + "#join=" + CODE);
+      await p.waitForTimeout(500);
+      check(`install (${name}): invite link opens the instructions`, await p.evaluate(() => document.getElementById("install-sheet").open));
+      check(`install (${name}): shows the code`, (await p.textContent("#install-code")) === "KFMQ-K7JP-AQ9N-CBG8");
+      const steps = await p.$$eval("#install-steps li", (els) => els.map((e) => e.textContent));
+      if (name === "iPhone") {
+        check("install (iPhone): Share → Add to Home Screen → Add → join with code", steps.length === 4 && /Share/.test(steps[0]) && /Add to Home Screen/.test(steps[1]) && /Join with a code/.test(steps[3]), steps.join(" / "));
+        check("install (iPhone): explains why to copy the code", await p.isVisible("#install-note"));
+      } else {
+        check("install (Android): join step, then browser-menu install", /Join the shared list/.test(steps[0]) && /Install app|Add to Home screen/.test(steps[1]), steps.join(" / "));
+        check("install (Android): has a Join button", await p.isVisible("#install-steps button"));
+      }
+      await p.click("#install-later");
+      check(`install (${name}): "Maybe later" closes it`, !(await p.evaluate(() => document.getElementById("install-sheet").open)));
+      check(`install (${name}): invite still waiting in the card`, await p.isVisible("#sync-invite-prompt"));
+      check(`install (${name}): Get app button in the header`, await p.isVisible("#get-app"));
+      await p.click("#get-app");
+      check(`install (${name}): Get app reopens the instructions`, await p.evaluate(() => document.getElementById("install-sheet").open));
+      await p.keyboard.press("Escape");
+      check(`install (${name}): Escape closes it`, !(await p.evaluate(() => document.getElementById("install-sheet").open)));
+      check(`install (${name}): no horizontal scroll`, await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+      check(`install (${name}): no JS errors`, errs.length === 0, errs.join(" | "));
+      await ctx.close();
+    }
+    {
+      const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 }, serviceWorkers: "block" });
+      const p = await ctx.newPage();
+      await p.goto(BASE2 + "#join=" + CODE);
+      await p.waitForTimeout(500);
+      check("install (desktop): invite link doesn't pop up instructions", !(await p.evaluate(() => document.getElementById("install-sheet").open)));
+      check("install (desktop): invite shown in the card", await p.isVisible("#sync-invite-prompt"));
+      await ctx.close();
+    }
+
     console.log("\nScreenshots in", tmp);
   } finally {
     await browser.close();

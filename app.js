@@ -503,7 +503,10 @@
     return out;
   }
   function cleanCode(s) {
-    return String(s || "").toUpperCase().replace(/[^0-9A-Z]/g, "");
+    s = String(s || "");
+    var link = s.match(/join=([0-9A-Za-z-]+)/); // a whole invite link was pasted
+    if (link) s = link[1];
+    return s.toUpperCase().replace(/[^0-9A-Z]/g, "");
   }
   function prettyCode(c) { return c.replace(/(.{4})(?=.)/g, "$1-"); }
   function inviteLink(code) {
@@ -694,12 +697,21 @@
   function readInviteFromUrl() {
     var m = location.hash.match(/join=([0-9A-Za-z-]+)/);
     if (!m) return;
-    history.replaceState(null, "", location.href.split("#")[0]);
+    // In an in-app browser (Instagram etc.) keep the link, so "Open in Safari" still carries the invite
+    if (!platform.inApp) history.replaceState(null, "", location.href.split("#")[0]);
     var code = cleanCode(m[1]);
     if (!ROOM_RE.test(code)) { toast("That invite link isn't valid"); return; }
     if (code === sync.roomId) { toast("You're already on this shared list"); return; }
     sync.inviteRoom = code;
     selectTab("episodes");
+    if (platform.mobile && !isInstalled() && syncAvailable()) openInstallSheet(code);
+  }
+
+  function acceptInvite(code) {
+    return startSync(code, "join").then(function (ok) {
+      if (ok && sync.inviteRoom === code) { sync.inviteRoom = null; renderSync(); }
+      return ok;
+    });
   }
 
   function initSync() {
@@ -729,12 +741,7 @@
       renderSync();
       setTimeout(function () { if (sync.leaveArmed) { sync.leaveArmed = false; renderSync(); } }, 4000);
     });
-    $("sync-invite-accept").addEventListener("click", function () {
-      var code = sync.inviteRoom;
-      startSync(code, "join").then(function (ok) {
-        if (ok) { sync.inviteRoom = null; renderSync(); }
-      });
-    });
+    $("sync-invite-accept").addEventListener("click", function () { acceptInvite(sync.inviteRoom); });
     $("sync-invite-decline").addEventListener("click", function () {
       sync.inviteRoom = null;
       showSyncMessage("");
@@ -807,6 +814,7 @@
     applyFilters();
     updateProgress();
     renderGuide();
+    initInstall();
     initSync();
 
     if (location.protocol === "file:") $("file-note").hidden = false;
@@ -814,52 +822,204 @@
     registerServiceWorker();
   }
 
-  // ---------- Service worker + update banner ----------
+  // ---------- Get the app (install instructions) ----------
+  var ua = navigator.userAgent || "";
+  var platform = {
+    ios: /iPad|iPhone|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1),
+    android: /Android/i.test(ua),
+    inApp: /FBAN|FBAV|Instagram|Snapchat|Line\/|TikTok|musical_ly|GSA\//.test(ua), // can't install from these
+    iosOtherBrowser: /CriOS|FxiOS|EdgiOS|OPiOS/.test(ua),
+    chromium: /Chrome\/|Chromium|Edg\//.test(ua),
+    macSafari: /Macintosh/.test(ua) && /Safari\//.test(ua) && !/Chrome|Chromium|Edg|Firefox/.test(ua)
+  };
+  platform.mobile = platform.ios || platform.android;
+  var installPrompt = null; // Chrome/Edge/Android's own install dialog, when offered
+
+  function isInstalled() {
+    return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) || navigator.standalone === true;
+  }
+  function canOfferInstall() {
+    if (location.protocol === "file:" || isInstalled()) return false;
+    return platform.mobile || !!installPrompt || platform.macSafari || platform.chromium;
+  }
+  function updateGetApp() { $("get-app").hidden = !canOfferInstall(); }
+
+  var ICON = {
+    share: '<svg class="inline-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M7 10H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-1"/></svg>',
+    add: '<svg class="inline-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><path d="M12 8v8M8 12h8"/></svg>',
+    install: '<svg class="inline-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M12 7v6m0 0-2.5-2.5M12 13l2.5-2.5M8 20h8"/></svg>'
+  };
+
+  var sheet = { code: null, joined: false };
+
+  function addStep(html, extra) {
+    var li = document.createElement("li");
+    li.innerHTML = html; // fixed strings only (no user data)
+    if (extra) li.appendChild(extra);
+    $("install-steps").appendChild(li);
+    return li;
+  }
+
+  function renderInstallSheet() {
+    var code = sheet.code;
+    var invited = !!code && syncAvailable();
+    $("install-steps").textContent = "";
+    $("install-invite").hidden = !invited;
+    if (invited) $("install-code").textContent = prettyCode(code);
+    $("install-native").hidden = true;
+    var note = "";
+
+    $("install-sub").textContent = invited
+      ? "Add it to your home screen so your shared list is one tap away."
+      : "Add it to your home screen. It opens full-screen and works offline.";
+
+    if (platform.ios && platform.inApp) {
+      addStep("This app's built-in browser can't install apps. Tap the <strong>•••</strong> or share menu and choose <strong>Open in Safari</strong> (or <strong>Open in browser</strong>).");
+      addStep("Safari opens the same page and shows these steps again.");
+    } else if (platform.ios) {
+      addStep(platform.iosOtherBrowser
+        ? "Tap the <strong>Share</strong> button " + ICON.share + " next to the address bar."
+        : "Tap the <strong>Share</strong> button " + ICON.share + " at the bottom of Safari (at the top on iPad).");
+      addStep("Scroll down and tap <strong>Add to Home Screen</strong> " + ICON.add + ".");
+      addStep("Tap <strong>Add</strong>.");
+      if (invited) {
+        addStep("Open <strong>Naruto Filler</strong> from your home screen, tap <strong>Join with a code</strong> and paste your code.");
+        note = "Your iPhone keeps home-screen apps separate from Safari, so you join the list inside the app. Copy the code first.";
+      } else {
+        addStep("Open <strong>Naruto Filler</strong> from your home screen.");
+      }
+    } else if (platform.android) {
+      if (invited) {
+        var join = document.createElement("button");
+        join.type = "button";
+        join.className = "btn btn-small step-btn";
+        join.textContent = sheet.joined ? "Joined ✓" : "Join the list";
+        join.disabled = sheet.joined;
+        join.addEventListener("click", function () {
+          join.disabled = true;
+          join.textContent = "Joining…";
+          acceptInvite(code).then(function (ok) {
+            sheet.joined = ok;
+            join.disabled = ok;
+            join.textContent = ok ? "Joined ✓" : "Try again";
+          });
+        });
+        addStep("Join the shared list: ", join);
+      }
+      if (installPrompt) {
+        addStep("Tap <strong>Install app</strong> below, then <strong>Install</strong>.");
+        $("install-native").hidden = false;
+      } else {
+        addStep("Open the browser menu (<strong>⋮</strong> at the top right) and tap <strong>Install app</strong> or <strong>Add to Home screen</strong>. In Samsung Internet: <strong>≡ → Add page to → Home screen</strong>.");
+      }
+      addStep("Open <strong>Naruto Filler</strong> from your home screen.");
+    } else if (installPrompt) {
+      addStep("Click <strong>Install app</strong> below.");
+      $("install-native").hidden = false;
+    } else if (platform.macSafari) {
+      addStep("In the menu bar, choose <strong>File → Add to Dock</strong>.");
+    } else {
+      addStep("Click the install icon " + ICON.install + " at the right end of the address bar, or open the <strong>⋮</strong> menu and choose <strong>Cast, save and share → Install page as app</strong>.");
+    }
+    $("install-note").textContent = note;
+    $("install-note").hidden = !note;
+  }
+
+  function openInstallSheet(code) {
+    sheet.code = code || null;
+    sheet.joined = false;
+    renderInstallSheet();
+    var dlg = $("install-sheet");
+    if (dlg.open) return;
+    if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
+    $("install-title").focus();
+  }
+  function closeInstallSheet() {
+    var dlg = $("install-sheet");
+    if (typeof dlg.close === "function" && dlg.open) dlg.close(); else dlg.removeAttribute("open");
+  }
+
+  function initInstall() {
+    $("install-sheet").querySelector(".sheet-mark").innerHTML = document.querySelector(".brand-mark").innerHTML;
+    window.addEventListener("beforeinstallprompt", function (e) {
+      e.preventDefault(); // we offer our own button instead of the browser's banner
+      installPrompt = e;
+      updateGetApp();
+      if ($("install-sheet").open) renderInstallSheet();
+    });
+    window.addEventListener("appinstalled", function () {
+      installPrompt = null;
+      closeInstallSheet();
+      updateGetApp();
+      toast("Installed! Open Naruto Filler from your home screen.");
+    });
+    $("get-app").addEventListener("click", function () {
+      if (installPrompt && !platform.mobile) { $("install-native").click(); return; }
+      openInstallSheet(sync.inviteRoom);
+    });
+    $("install-native").addEventListener("click", function () {
+      if (!installPrompt) return;
+      var p = installPrompt;
+      p.prompt();
+      p.userChoice.then(function () {
+        installPrompt = null;
+        updateGetApp();
+        if ($("install-sheet").open) renderInstallSheet();
+      });
+    });
+    $("install-copy").addEventListener("click", function () {
+      var text = prettyCode(sheet.code || "");
+      var btn = $("install-copy");
+      function done() { btn.textContent = "Copied!"; setTimeout(function () { btn.textContent = "Copy code"; }, 2000); }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { toast("Press and hold the code to copy it"); });
+      } else {
+        toast("Press and hold the code to copy it");
+      }
+    });
+    $("install-close").addEventListener("click", closeInstallSheet);
+    $("install-later").addEventListener("click", closeInstallSheet);
+    $("install-sheet").addEventListener("click", function (e) {
+      if (e.target === $("install-sheet")) closeInstallSheet(); // tap on the backdrop
+    });
+    updateGetApp();
+  }
+
+  // ---------- Service worker: always up to date ----------
+  // The service worker loads the newest files on every open (when online). When the app
+  // comes back from the background, it also checks for changes and reloads if there are any.
+  var UPDATED_FLAG = "naruto-filler:just-updated";
+
   function registerServiceWorker() {
+    try {
+      if (sessionStorage.getItem(UPDATED_FLAG)) {
+        sessionStorage.removeItem(UPDATED_FLAG);
+        toast("Updated to the latest version");
+      }
+    } catch (e) { /* ignore */ }
+
     if (!("serviceWorker" in navigator) || location.protocol === "file:") return;
 
-    var refreshing = false;
-    var updateRequested = false;
-    var waitingWorker = null;
-
-    function showUpdate(worker) {
-      waitingWorker = worker;
-      $("update-banner").hidden = false;
+    var lastCheck = Date.now();
+    function checkForUpdates(reg) {
+      reg.update().catch(function () {});
+      var ctrl = navigator.serviceWorker.controller;
+      if (!ctrl || !navigator.onLine || Date.now() - lastCheck < 30000) return;
+      lastCheck = Date.now();
+      var channel = new MessageChannel();
+      channel.port1.onmessage = function (e) {
+        if (!e.data || !e.data.changed) return;
+        try { sessionStorage.setItem(UPDATED_FLAG, "1"); } catch (err) { /* ignore */ }
+        location.reload();
+      };
+      ctrl.postMessage({ type: "CHECK_UPDATES" }, [channel.port2]);
     }
 
-    $("update-button").addEventListener("click", function () {
-      if (!waitingWorker) { location.reload(); return; }
-      updateRequested = true;
-      $("update-button").textContent = "Updating…";
-      waitingWorker.postMessage({ type: "SKIP_WAITING" });
-    });
-
-    // Reload only when the user asked for the update. On the very first visit the new
-    // worker also takes control (clients.claim()), and that must not reload the page.
-    navigator.serviceWorker.addEventListener("controllerchange", function () {
-      if (!updateRequested || refreshing) return;
-      refreshing = true;
-      location.reload();
-    });
-
     window.addEventListener("load", function () {
-      navigator.serviceWorker.register("./service-worker.js", { scope: "./" }).then(function (reg) {
-        // An update was already downloaded and is waiting
-        if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
-
-        function track(sw) {
-          if (!sw) return;
-          sw.addEventListener("statechange", function () {
-            // "installed" + an existing controller = new version ready (not first install)
-            if (sw.state === "installed" && navigator.serviceWorker.controller) showUpdate(sw);
-          });
-        }
-        track(reg.installing); // an update may already be downloading
-        reg.addEventListener("updatefound", function () { track(reg.installing); });
-
-        // Check for updates when the app comes back to the foreground
+      // updateViaCache "none": always fetch service-worker.js itself fresh
+      navigator.serviceWorker.register("./service-worker.js", { scope: "./", updateViaCache: "none" }).then(function (reg) {
         document.addEventListener("visibilitychange", function () {
-          if (document.visibilityState === "visible") reg.update().catch(function () {});
+          if (document.visibilityState === "visible") checkForUpdates(reg);
         });
       }).catch(function (err) {
         console.warn("Service worker registration failed:", err);

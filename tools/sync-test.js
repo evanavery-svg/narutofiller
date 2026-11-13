@@ -177,10 +177,10 @@ async function waitFor(fn, timeout = 8000) {
     await B.page.fill("#sync-code", "abc");
     await B.page.click("#sync-join-submit");
     check("join: malformed code -> format hint", (await B.page.textContent("#sync-message")).includes("16 letters"));
-    // Typing the code by hand (lowercase, with dashes) works
-    await B.page.fill("#sync-code", code.toLowerCase().replace(/(.{4})(?=.)/g, "$1-"));
+    // Pasting the whole invite link (code in lowercase with dashes) works too
+    await B.page.fill("#sync-code", BASE + "#join=" + code.toLowerCase().replace(/(.{4})(?=.)/g, "$1-"));
     await B.page.click("#sync-join-submit");
-    check("join: typed code works", (await waitFor(async () => (await status(B.page)) === "synced", 15000)) === true);
+    check("join: pasted invite link / typed code works", (await waitFor(async () => (await status(B.page)) === "synced", 15000)) === true);
 
     // Security rules (requests without admin rights, like a browser's)
     const api = `http://${EMULATOR}/v1/projects/${PROJECT}/databases/(default)/documents`;

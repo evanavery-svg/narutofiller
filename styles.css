@@ -122,9 +122,11 @@ button { cursor: pointer; }
   flex: none; display: grid; place-items: center;
   width: 42px; height: 42px; border-radius: 12px;
   background: linear-gradient(135deg, #ffa24a, var(--accent-deep));
-  color: #16130f; font-family: var(--display); font-size: 1.45rem; letter-spacing: 0.02em; line-height: 1;
-  padding-top: 2px;
   box-shadow: inset 0 -3px 0 rgb(0 0 0 / 0.18), 0 6px 18px -6px var(--accent-glow);
+}
+.brand-leaf {
+  width: 86%; height: 86%; margin-top: 1px;
+  fill: none; stroke: #16130f; stroke-width: 6.5; stroke-linecap: round; stroke-linejoin: round;
 }
 .brand h1 {
   margin: 0; font-family: var(--display); font-weight: 400;
@@ -462,16 +464,6 @@ h3.card-title { font-size: 1.3rem; }
 }
 .app-footer p { margin: 6px 0; }
 
-.update-banner {
-  position: fixed; left: 50%; bottom: calc(16px + var(--safe-bottom)); transform: translateX(-50%);
-  z-index: 50; width: min(420px, calc(100% - 32px));
-}
-.update-banner button {
-  width: 100%; min-height: 48px; border: 0; border-radius: 99px; padding: 12px 18px;
-  background: linear-gradient(135deg, #ffa24a, var(--accent)); color: var(--accent-ink); font-weight: 750;
-  box-shadow: var(--shadow), 0 8px 24px -8px var(--accent-glow);
-}
-
 .toast {
   position: fixed; left: 50%; bottom: calc(80px + var(--safe-bottom)); transform: translateX(-50%);
   z-index: 40; max-width: calc(100% - 32px);
@@ -481,6 +473,84 @@ h3.card-title { font-size: 1.3rem; }
   animation: toast-in 0.25s ease-out;
 }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+
+/* ---------- Get the app ---------- */
+.get-app {
+  margin-left: auto; flex: none; display: inline-flex; align-items: center; gap: 6px;
+  min-height: 36px; padding: 6px 12px; border-radius: 99px;
+  background: rgb(255 122 26 / 0.12); border: 1px solid rgb(255 122 26 / 0.45); color: var(--accent-strong);
+  font-weight: 700; font-size: 0.85rem; transition: background 0.15s, color 0.15s;
+}
+.get-app:hover { background: rgb(255 122 26 / 0.22); color: #ffb070; }
+.get-app svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+
+.sheet {
+  width: min(460px, calc(100% - 24px)); max-height: calc(100% - 24px); padding: 0; margin: auto;
+  overflow: auto; overscroll-behavior: contain;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: 22px;
+  box-shadow: 0 30px 80px -20px rgb(0 0 0 / 0.8), 0 0 0 1px rgb(255 122 26 / 0.15);
+}
+.sheet::backdrop { background: rgb(8 6 5 / 0.7); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+.sheet[open] { animation: sheet-in 0.28s cubic-bezier(.2,.9,.3,1); }
+@keyframes sheet-in { from { opacity: 0; transform: translateY(24px); } }
+.sheet-inner {
+  position: relative; padding: 20px 20px calc(18px + var(--safe-bottom));
+  background: linear-gradient(180deg, rgb(255 122 26 / 0.10), transparent 120px);
+}
+.sheet-head { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+.sheet-mark { width: 48px; height: 48px; border-radius: 13px; }
+.sheet-heading { flex: 1 1 auto; min-width: 0; }
+.sheet-title { margin: 2px 0 4px; font-family: var(--display); font-weight: 400; font-size: 1.7rem; line-height: 1; letter-spacing: 0.04em; }
+.sheet-heading p { margin: 0; }
+.sheet-title:focus { outline: none; }
+.sheet-close {
+  flex: none; width: 36px; height: 36px; margin: -4px -6px 0 0; display: grid; place-items: center;
+  border-radius: 50%; border: 0; background: rgb(255 240 225 / 0.07); color: var(--muted);
+}
+.sheet-close:hover { color: var(--text); background: rgb(255 240 225 / 0.12); }
+.sheet-close svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+
+.invite-box {
+  margin: 0 0 14px; padding: 12px 14px; border-radius: var(--radius-sm);
+  background: rgb(52 211 153 / 0.08); border: 1px solid rgb(52 211 153 / 0.3);
+}
+.invite-box p { margin: 0 0 8px; }
+.invite-code-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.invite-code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 1.05rem; font-weight: 700;
+  letter-spacing: 0.05em; background: var(--bg); padding: 6px 10px; border-radius: 8px;
+  -webkit-user-select: all; user-select: all;
+}
+.btn-small { min-height: 36px; padding: 6px 12px; font-size: 0.88rem; }
+
+.steps { list-style: none; counter-reset: step; margin: 0; padding: 0; display: grid; gap: 12px; }
+.steps li { counter-increment: step; position: relative; padding-left: 40px; min-height: 28px; line-height: 1.5; }
+.steps li::before {
+  content: counter(step); position: absolute; left: 0; top: -1px;
+  width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  background: linear-gradient(135deg, #ffa24a, var(--accent)); color: var(--accent-ink);
+  font-family: var(--display); font-size: 1.05rem; padding-top: 1px;
+}
+.steps strong { color: var(--text); }
+.step-btn { margin-left: 4px; vertical-align: middle; }
+.inline-icon {
+  display: inline-block; width: 1.3em; height: 1.3em; vertical-align: -0.3em; margin: 0 1px;
+  fill: none; stroke: var(--accent-strong); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+.sheet-note { margin: 14px 0 0; }
+.sheet-actions { display: flex; gap: 8px; margin-top: 18px; }
+.sheet-actions .btn { flex: 1 1 0; }
+
+@media (max-width: 520px) {
+  /* Bottom sheet on phones */
+  .sheet { width: 100%; max-width: 100%; margin: auto 0 0; border-radius: 22px 22px 0 0; border-bottom: 0; max-height: 92%; }
+  @keyframes sheet-in { from { transform: translateY(100%); } }
+  .get-app span { /* icon only on phones; the label stays available to screen readers */
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+  }
+  .get-app { padding: 8px; min-width: 38px; min-height: 38px; justify-content: center; }
+}
 
 /* ---------- Watch together (shared list) ---------- */
 .sync-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; }
@@ -536,7 +606,7 @@ h3.card-title { font-size: 1.3rem; }
 
 @media (max-width: 520px) {
   .brand h1 { font-size: 1.55rem; }
-  .brand-mark { width: 38px; height: 38px; font-size: 1.3rem; }
+  .brand-mark { width: 38px; height: 38px; }
   .card { padding: 16px; }
   .tracker-top { gap: 14px; }
   .ring { width: 92px; height: 92px; }

@@ -27,7 +27,9 @@ To keep things simple, the site sorts episodes into just two categories:
   - **Reset progress**, which asks you to confirm first.
 - **Watch together.** Two (or more) people can share one watched list through a free Firebase database. Episodes either of you ticks show up on the other's phone within a second or two, and changes made offline sync later. It's off until you add your own Firebase project; see [Shared progress (Firebase)](#shared-progress-firebase).
 - **Skip-filler guide.** A separate tab that lists the episodes to watch, collapsed into ranges, and the episodes to skip, with a map showing which to watch. Watch **1–25, 27–96, 98–100, 107–135, 141–142, 220** (130 episodes) and skip the 90 filler episodes, which saves about **34 h 30 min** at about 23 minutes per episode.
-- **PWA.** You can install it on a phone or desktop. Every file is cached on the first visit, so the whole app then works offline. When a new version is deployed, an "Update available, tap to refresh" banner appears instead of the app quietly serving old files.
+- **PWA.** You can install it on a phone or desktop. Every file is saved on the first visit, so the whole app then works offline.
+- **Get the app.** A **Get app** button in the header shows step-by-step install instructions for the device you're on (iPhone/iPad, Android or desktop). They also pop up by themselves when someone opens a Watch together invite link on a phone.
+- **Always up to date.** Whenever there's a connection, every open of the site or app loads the newest version, and the app checks again each time you switch back to it. There's no "update available" step. Offline, it uses the last saved copy.
 
 ## Files
 
@@ -41,13 +43,13 @@ firestore.rules       Firestore security rules to paste into the Firebase consol
 firebase.json         points the Firebase CLI / emulator at firestore.rules
 data/episodes.js      const EPISODES = [{ number, title, type }, ...]
 manifest.json         web app manifest
-service-worker.js     precache + cache-first + versioned caches + update flow
-icons/                original "NF" icons (192, 512, maskable 192/512, Apple 180, favicon, SVG)
+service-worker.js     offline copy + network-first (always the newest version when online)
+icons/                Hidden Leaf symbol icons (192, 512, maskable 192/512, Apple 180, favicon, SVG)
 fonts/                Bebas Neue display font (self-hosted, 14 KB) and its license (OFL.txt)
 .nojekyll             tells GitHub Pages to serve the files as they are
 tools/                optional developer scripts (not needed to run the site)
   validate-data.js    checks there are exactly 220 episodes numbered 1–220 and prints counts per type
-  make-icons.js       regenerates the PNG icons (needs Playwright)
+  make-icons.js       draws the leaf logo, regenerates the icons and the header logo (needs Playwright)
   e2e-test.js         end-to-end browser test (needs Playwright)
   sync-test.js        two-device shared-list test against the Firestore emulator
 ```
@@ -81,14 +83,20 @@ All paths are relative (`./…`) and the manifest uses `start_url` and `scope` `
 
 ### Publishing an update
 
-When you change any file (including `firebase-config.js`), also bump `CACHE_VERSION` in `service-worker.js` (for example `"v1.1.0"` to `"v1.1.1"`). Returning visitors' browsers then download the new version in the background, and they see the **Update available, tap to refresh** banner. Tapping it switches to the new version and reloads. The old cache is deleted, and their watched list is kept.
+Just commit and push. GitHub Pages takes a minute or two to publish (its servers can hold on to old files for up to about 10 minutes). After that:
+
+- **Opening the site or app** loads the new version right away.
+- **An app that was already open in the background** checks for changes when you switch back to it, and reloads by itself if anything changed. A short "Updated to the latest version" message confirms it.
+- **Watched episodes and the shared list** are kept.
+
+You only need to bump `CACHE_VERSION` in `service-worker.js` when you add or remove files in its `PRECACHE` list, so the offline copy includes them.
 
 ## Installing as an app
 
-The site must be served over HTTPS (for example GitHub Pages) or from `localhost`. Visit it once while online.
+The site must be served over HTTPS (for example GitHub Pages) or from `localhost`. Visit it once while online. The **Get app** button in the site's header shows these steps for the device you're on.
 
 - **Android (Chrome):** open the site, then tap the **⋮** menu and choose **Install app** or **Add to Home screen**. Chrome may also show an install prompt on its own.
-- **iPhone / iPad (Safari):** open the site, tap **Share**, then **Add to Home Screen**, then **Add**. It opens full-screen with the orange "NF" icon.
+- **iPhone / iPad (Safari):** open the site, tap **Share**, then **Add to Home Screen**, then **Add**. It opens full-screen with the orange Hidden Leaf icon. Other iPhone browsers (Chrome, Edge, Firefox) also offer **Add to Home Screen** in their Share menu. In-app browsers, like the ones inside Instagram or Facebook, can't install apps; open the page in Safari first.
 - **Desktop (Chrome / Edge):** click the install icon at the right end of the address bar, or open the **⋮** menu and choose **Cast, save and share → Install page as app**. In Edge it's **Apps → Install this site as an app**.
 - **Desktop (Safari on macOS Sonoma or later):** choose **File → Add to Dock**.
 
@@ -131,7 +139,7 @@ The **Watch together** card lets two people share one watched list. It uses Goog
      };
      ```
 
-   - Bump `CACHE_VERSION` in `service-worker.js`, then commit and push. GitHub Pages updates within a minute or two.
+   - Commit and push. GitHub Pages updates within a minute or two.
 
 The config values aren't secret. Every Firebase web app sends them to the browser, so it's fine to commit them to a public repository. What protects your data is the security rules from step 3.
 
@@ -139,9 +147,14 @@ The config values aren't secret. Every Firebase web app sends them to the browse
 
 1. On your phone, open the site and tap **Create list** in the **Watch together** card. Anything you've already ticked goes into the new list.
 2. Tap **Invite** and send the link to the other person. On a phone this opens the share sheet; on desktop it copies the link.
-3. They open the link and tap **Join**. Anything they had already ticked is merged in.
+3. They open the link. On a phone, install instructions pop up, showing the list's code.
+   - **iPhone:** an app added to the Home Screen keeps its data separate from Safari. So they copy the code, add the app to the Home Screen, open it, tap **Join with a code** and paste.
+   - **Android:** they tap **Join the list** in the pop-up, then install. The installed app keeps the joined list.
+   - **Desktop, or to skip installing:** they tap **Join** in the Watch together card.
 
-The other person can also tap **Join with a code** and type the 16-character code shown on the card, for example `KFMQ-K7JP-AQ9N-CBG8`. Upper or lower case and dashes don't matter.
+   Anything they had already ticked is merged in.
+
+**Join with a code** accepts the 16-character code shown on the card (for example `KFMQ-K7JP-AQ9N-CBG8`) or the whole invite link. Upper or lower case and dashes don't matter.
 
 From then on:
 
@@ -237,7 +250,16 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
   - the manifest parses with no errors
   - Chrome's installability check reports no errors
 - **Offline:** the site loads and works with the network off.
-- **Update flow:** after a new `CACHE_VERSION` is deployed, the banner appears. Tapping it reloads onto the new cache, deletes the old one, and keeps watched episodes.
+- **Always up to date:**
+  - a change deployed to the server shows on the next open, with no version bump
+  - the newest copy is used offline
+  - the "has anything changed?" check (used when switching back to the app) answers correctly before and after a change
+  - a new service worker takes over by itself and deletes the old cache
+- **Install instructions** (simulated iPhone, Android and desktop):
+  - an invite link opens the instructions on phones but not on desktop
+  - the right steps show for each device, along with the code
+  - **Maybe later**, **Escape** and the **Get app** button work
+  - the invite stays waiting in the Watch together card
 
 - **Sharing switched off:** the card explains that sharing isn't set up (or, on `file://`, that it needs the hosted site).
 
@@ -255,14 +277,14 @@ node tools/sync-test.js
 
 It checks:
 
-- **Create and join:** creating a list; joining through an invite link and through a typed code; the two devices' existing progress being merged; error messages for unknown and badly formed codes.
+- **Create and join:** creating a list; joining through an invite link, and by pasting a code or the whole link into **Join with a code**; the two devices' existing progress being merged; error messages for unknown and badly formed codes.
 - **Live sync:** ticks and unticks going both ways, and reset clearing the other device.
 - **Offline:** changes made offline converging with the other device's changes after reconnecting, including a change made offline just before the app was closed.
 - **Leave:** stopping sharing, and staying left after a reload.
 - **Security rules:** listing rooms, malformed codes, unexpected fields, deletes, and other collections are all refused.
 
-The last runs passed all 63 checks in `e2e-test.js` and all 31 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 99**, including "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
+The last runs passed all 91 checks in `e2e-test.js` and all 31 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 99**, including "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
 
 ## Legal
 
-This is an unofficial fan project. It isn't affiliated with or endorsed by Masashi Kishimoto, Shueisha, Studio Pierrot, TV Tokyo or VIZ Media. It uses no official logos, artwork or character images: the interface is text and CSS, and the icons are original designs. The headings use [Bebas Neue](https://github.com/dharmatype/Bebas-Neue) by Dharma Type, under the SIL Open Font License 1.1 (see `fonts/OFL.txt`). Episode titles are listed for identification only.
+This is an unofficial fan project. It isn't affiliated with or endorsed by Masashi Kishimoto, Shueisha, Studio Pierrot, TV Tokyo or VIZ Media. The logo and app icons show the Hidden Leaf village symbol from *Naruto*, redrawn for this site (`tools/make-icons.js`). The site uses no official artwork or character images. The symbol belongs to its owners, and it's used here only to identify the show. The headings use [Bebas Neue](https://github.com/dharmatype/Bebas-Neue) by Dharma Type, under the SIL Open Font License 1.1 (see `fonts/OFL.txt`). Episode titles are listed for identification only.
