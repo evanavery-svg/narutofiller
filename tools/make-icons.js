@@ -142,7 +142,7 @@ if (require.main === module) (async () => {
   const html = fs.readFileSync(indexPath, "utf8");
   const re = /<!-- leaf:start -->[\s\S]*?<!-- leaf:end -->/;
   if (re.test(html)) {
-    const inline = `<!-- leaf:start --><svg class="brand-leaf" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><path d="${LEAF}"/></svg><!-- leaf:end -->`;
+    const inline = `<!-- leaf:start --><svg class="app-leaf" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><path d="${LEAF}"/></svg><!-- leaf:end -->`;
     fs.writeFileSync(indexPath, html.replace(re, inline));
     console.log("updated logo in index.html");
   }

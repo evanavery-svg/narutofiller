@@ -45,19 +45,23 @@
     })
   );
   var defaultPrefs = {
-    types: TYPES.map(function (t) { return t.id; }),
+    show: "all",          // "all" | "canon" | "filler"
     hideWatched: false,
     skipFillerNext: true,
     tab: "episodes"
   };
-  var prefs = Object.assign({}, defaultPrefs, load(STORAGE.prefs, {}));
-  var activeTypes = new Set(prefs.types.filter(function (t) { return TYPE_BY_ID[t]; }));
-  // Older versions had four types; if none of the saved ones still exist, show everything.
-  if (!activeTypes.size && prefs.types.length) activeTypes = new Set(defaultPrefs.types);
+  var storedPrefs = load(STORAGE.prefs, {}) || {};
+  var prefs = Object.assign({}, defaultPrefs, storedPrefs);
+  if (!storedPrefs.show && Array.isArray(storedPrefs.types)) { // older versions: toggle buttons per type
+    var hasCanon = storedPrefs.types.indexOf("canon") !== -1, hasFiller = storedPrefs.types.indexOf("filler") !== -1;
+    prefs.show = hasCanon && !hasFiller ? "canon" : hasFiller && !hasCanon ? "filler" : "all";
+  }
+  delete prefs.types;
+  if (["all", "canon", "filler"].indexOf(prefs.show) === -1) prefs.show = "all";
+  function showsKind(kind) { return prefs.show === "all" || prefs.show === kind; }
   var query = "";
 
   function savePrefs() {
-    prefs.types = Array.from(activeTypes);
     save(STORAGE.prefs, prefs);
   }
   function saveWatched() {
@@ -122,57 +126,64 @@
   }
 
   var toastTimer;
-  function toast(msg) {
+  /** Shows a short message; optionally with an action button such as "Undo". */
+  function toast(msg, actionLabel, action) {
     var el = $("toast");
-    el.textContent = msg;
+    el.textContent = "";
+    var text = document.createElement("span");
+    text.textContent = msg;
+    el.appendChild(text);
+    if (actionLabel) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "toast-action";
+      btn.textContent = actionLabel;
+      btn.addEventListener("click", function () { el.hidden = true; action(); });
+      el.appendChild(btn);
+    }
     el.hidden = false;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(function () { el.hidden = true; }, 2600);
+    toastTimer = setTimeout(function () { el.hidden = true; }, actionLabel ? 6000 : 2600);
   }
 
   // Precomputed search text per episode
   var searchIndex = EPISODES.map(function (ep) { return normalize(ep.title); });
 
   // ---------- Build static UI ----------
+  // "All / Canon / Filler" segmented control
+  var SHOW_OPTIONS = [["all", "All"], ["canon", "Canon"], ["filler", "Filler"]];
   function buildFilters() {
     var wrap = $("filters");
-    TYPES.forEach(function (t) {
-      var count = EPISODES.filter(function (e) { return kindOf(e) === t.id; }).length;
+    SHOW_OPTIONS.forEach(function (o, idx) {
       var btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "filter";
-      btn.dataset.type = t.id;
-      btn.setAttribute("aria-pressed", String(activeTypes.has(t.id)));
-      btn.title = t.long + ": " + t.desc;
-      btn.innerHTML = '<span class="dot" aria-hidden="true"></span><span class="label"></span><span class="count"></span>';
-      btn.querySelector(".label").textContent = t.label;
-      btn.querySelector(".count").textContent = count;
-      btn.addEventListener("click", function () {
-        if (activeTypes.has(t.id)) activeTypes.delete(t.id); else activeTypes.add(t.id);
-        btn.setAttribute("aria-pressed", String(activeTypes.has(t.id)));
-        savePrefs();
-        applyFilters();
+      btn.setAttribute("role", "radio");
+      btn.dataset.show = o[0];
+      btn.textContent = o[1];
+      btn.addEventListener("click", function () { setShow(o[0]); });
+      btn.addEventListener("keydown", function (e) {
+        if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+        var next = SHOW_OPTIONS[(idx + (e.key === "ArrowRight" ? 1 : SHOW_OPTIONS.length - 1)) % SHOW_OPTIONS.length][0];
+        setShow(next);
+        wrap.querySelector('[data-show="' + next + '"]').focus();
+        e.preventDefault();
       });
       wrap.appendChild(btn);
     });
+    syncShowButtons();
   }
-
-  function buildLegend() {
-    var dl = $("legend-list");
-    TYPES.forEach(function (t) {
-      var item = document.createElement("div");
-      item.className = "legend-item";
-      var dt = document.createElement("dt");
-      var badge = document.createElement("span");
-      badge.className = "badge badge--" + t.id;
-      badge.textContent = t.label;
-      dt.appendChild(badge);
-      var dd = document.createElement("dd");
-      dd.textContent = t.long + ". " + t.desc;
-      item.appendChild(dt);
-      item.appendChild(dd);
-      dl.appendChild(item);
+  function syncShowButtons() {
+    Array.prototype.forEach.call($("filters").children, function (b) {
+      var on = b.dataset.show === prefs.show;
+      b.setAttribute("aria-checked", String(on));
+      b.tabIndex = on ? 0 : -1;
     });
+  }
+  function setShow(value) {
+    prefs.show = value;
+    savePrefs();
+    syncShowButtons();
+    applyFilters();
   }
 
   var rows = []; // index-aligned with EPISODES
@@ -183,7 +194,6 @@
     var frag = document.createDocumentFragment();
     EPISODES.forEach(function (ep) {
       var kind = kindOf(ep);
-      var t = TYPE_BY_ID[kind];
       var li = document.createElement("li");
       li.className = "episode";
       li.id = "ep-" + ep.number;
@@ -210,12 +220,13 @@
       var title = document.createElement("p");
       title.className = "ep-title";
       title.textContent = ep.title;
-      var badge = document.createElement("span");
-      badge.className = "badge badge--" + kind;
-      badge.textContent = t.label;
-      badge.title = t.long;
       main.appendChild(title);
-      main.appendChild(badge);
+      if (kind === "filler") { // canon is the default, so only filler is tagged
+        var badge = document.createElement("span");
+        badge.className = "badge";
+        badge.textContent = "Filler";
+        main.appendChild(badge);
+      }
 
       li.appendChild(label);
       li.appendChild(num);
@@ -246,7 +257,7 @@
   }
 
   // ---------- Episode maps (one square per episode) ----------
-  var mapCells = { progress: [], guide: [] };
+  var mapCells = { guide: [] };
   function buildMap(container, cells) {
     var frag = document.createDocumentFragment();
     EPISODES.forEach(function (ep) {
@@ -265,14 +276,6 @@
       if (n) jumpTo(EPISODES[n - 1]);
     });
   }
-  function updateProgressMap(next) {
-    for (var i = 0; i < TOTAL; i++) {
-      var c = mapCells.progress[i];
-      c.classList.toggle("is-on", watched.has(i + 1));
-      c.classList.toggle("is-next", !!next && next.number === i + 1);
-    }
-  }
-
   function syncRow(i) {
     var on = watched.has(EPISODES[i].number);
     rows[i].input.checked = on;
@@ -291,7 +294,7 @@
 
   function isVisible(i) {
     var ep = EPISODES[i];
-    if (!activeTypes.has(kindOf(ep))) return false;
+    if (!showsKind(kindOf(ep))) return false;
     if (prefs.hideWatched && watched.has(ep.number)) return false;
     return matchesQuery(i);
   }
@@ -333,15 +336,13 @@
     var total = watched.size;
     var canon = canonEpisodes.filter(function (e) { return watched.has(e.number); }).length;
     var pct = Math.round((total / TOTAL) * 100);
-    $("progress-all-text").textContent = total + " / " + TOTAL + " (" + pct + "%)";
-    $("progress-canon-text").textContent = canon + " / " + canonEpisodes.length;
+    $("progress-all-text").textContent = total + " of " + TOTAL;
+    $("progress-percent").textContent = pct + "%";
+    $("progress-canon-text").textContent = canon + " of " + canonEpisodes.length + " canon episodes";
     setBar("progress-all-bar", total, TOTAL);
-    setBar("progress-canon-bar", canon, canonEpisodes.length);
-    $("progress-ring").style.setProperty("--p", String((total / TOTAL) * 100));
-    $("ring-value").textContent = pct + "%";
 
     var next = nextEpisode();
-    updateProgressMap(next);
+    $("next-label").textContent = total ? "Continue" : "Start Watching";
     $("next-hint").textContent = next
       ? "Ep " + next.number + " · " + next.title
       : (prefs.skipFillerNext ? "All non-filler episodes watched!" : "You've watched everything!");
@@ -375,14 +376,9 @@
         savePrefs();
       }
       if (!matchesQuery(i)) { $("search").value = ""; query = ""; }
-      if (!activeTypes.has(kindOf(ep))) {
-        activeTypes.add(kindOf(ep));
-        var btn = document.querySelector('.filter[data-type="' + kindOf(ep) + '"]');
-        if (btn) btn.setAttribute("aria-pressed", "true");
-        savePrefs();
-      }
+      if (!showsKind(kindOf(ep))) { prefs.show = "all"; savePrefs(); syncShowButtons(); }
       applyFilters();
-      toast("Filters adjusted to show episode " + ep.number);
+      toast("Showing all episodes so you can see episode " + ep.number);
     }
     var li = rows[i].li;
     var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -409,6 +405,77 @@
     applyFilters();
     showResetConfirm(false);
     toast("Progress reset");
+  }
+
+  // ---------- Mark several episodes at once ----------
+  function openDialog(dlg, focusEl) {
+    if (!dlg.open) { if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", ""); }
+    if (focusEl) focusEl.focus();
+  }
+  function closeDialog(dlg) {
+    if (typeof dlg.close === "function" && dlg.open) dlg.close(); else dlg.removeAttribute("open");
+  }
+
+  function bulkRange() {
+    var a = parseInt($("bulk-from").value, 10), b = parseInt($("bulk-to").value, 10);
+    if (!(a >= 1 && a <= TOTAL && b >= 1 && b <= TOTAL)) return null;
+    if (a > b) { var t = a; a = b; b = t; }
+    var skipFiller = $("bulk-skip-filler").checked;
+    var nums = [];
+    for (var n = a; n <= b; n++) {
+      if (skipFiller && kindOf(EPISODES[n - 1]) === "filler") continue;
+      nums.push(n);
+    }
+    return { from: a, to: b, nums: nums };
+  }
+  function renderBulkSummary() {
+    var r = bulkRange();
+    $("bulk-watch").disabled = $("bulk-unwatch").disabled = !r || !r.nums.length;
+    if (!r) { $("bulk-summary").textContent = "Enter episode numbers from 1 to " + TOTAL + "."; return; }
+    var skipped = r.to - r.from + 1 - r.nums.length;
+    $("bulk-summary").textContent = (r.from === r.to ? "Episode " + r.from : "Episodes " + r.from + "–" + r.to) + ": " +
+      r.nums.length + " episode" + (r.nums.length === 1 ? "" : "s") +
+      (skipped ? " (" + skipped + " filler skipped)" : "") + ".";
+  }
+  function refreshAfterBulk(nums) {
+    nums.forEach(function (n) { syncRow(n - 1); });
+    updateProgress();
+    applyFilters();
+  }
+  function setWatchedMany(nums, on) {
+    nums.forEach(function (n) { if (on) watched.add(n); else watched.delete(n); });
+    recordChanges(nums);
+    refreshAfterBulk(nums);
+  }
+  function applyBulk(markWatched) {
+    var r = bulkRange();
+    if (!r) return;
+    var changed = r.nums.filter(function (n) { return watched.has(n) !== markWatched; });
+    closeDialog($("bulk-sheet"));
+    if (!changed.length) {
+      toast(markWatched ? "Those episodes were already watched" : "Those episodes weren't marked as watched");
+      return;
+    }
+    setWatchedMany(changed, markWatched);
+    toast((markWatched ? "Marked " : "Unmarked ") + changed.length + " episode" + (changed.length === 1 ? "" : "s"),
+      "Undo", function () { setWatchedMany(changed, !markWatched); });
+  }
+  function initBulk() {
+    $("bulk-open").addEventListener("click", function () {
+      $("bulk-from").value = "1";
+      $("bulk-to").value = "";
+      $("bulk-skip-filler").checked = false;
+      renderBulkSummary();
+      openDialog($("bulk-sheet"), $("bulk-to"));
+    });
+    ["bulk-from", "bulk-to"].forEach(function (id) { $(id).addEventListener("input", renderBulkSummary); });
+    $("bulk-skip-filler").addEventListener("change", renderBulkSummary);
+    $("bulk-form").addEventListener("submit", function (e) { e.preventDefault(); applyBulk(true); });
+    $("bulk-unwatch").addEventListener("click", function () { applyBulk(false); });
+    $("bulk-close").addEventListener("click", function () { closeDialog($("bulk-sheet")); });
+    $("bulk-sheet").addEventListener("click", function (e) {
+      if (e.target === $("bulk-sheet")) closeDialog($("bulk-sheet"));
+    });
   }
 
   // ---------- Skip-filler guide ----------
@@ -599,7 +666,7 @@
         prettyCode(sync.inviteRoom) + "? Your progress on this device will be merged into it.";
     }
     $("sync-leave").textContent = sync.leaveArmed ? "Tap again to leave" : "Leave";
-    $("sync-leave").classList.toggle("btn-danger", sync.leaveArmed);
+    $("sync-leave").classList.toggle("armed", sync.leaveArmed);
     updateProgress(); // reset wording depends on whether a list is shared
   }
 
@@ -767,10 +834,9 @@
   // ---------- Wire up ----------
   function init() {
     buildFilters();
-    buildLegend();
     buildList();
-    buildMap($("ep-map"), mapCells.progress);
     buildMap($("guide-map"), mapCells.guide);
+    initBulk();
     for (var i = 0; i < TOTAL; i++) syncRow(i);
 
     var search = $("search");
@@ -883,7 +949,7 @@
       addStep("Scroll down and tap <strong>Add to Home Screen</strong> " + ICON.add + ".");
       addStep("Tap <strong>Add</strong>.");
       if (invited) {
-        addStep("Open <strong>Naruto Filler</strong> from your home screen, tap <strong>Join with a code</strong> and paste your code.");
+        addStep("Open <strong>Naruto Filler</strong> from your home screen, tap <strong>Join with a Code</strong> and paste your code.");
         note = "Your iPhone keeps home-screen apps separate from Safari, so you join the list inside the app. Copy the code first.";
       } else {
         addStep("Open <strong>Naruto Filler</strong> from your home screen.");
@@ -892,7 +958,7 @@
       if (invited) {
         var join = document.createElement("button");
         join.type = "button";
-        join.className = "btn btn-small step-btn";
+        join.className = "button-tinted small step-btn";
         join.textContent = sheet.joined ? "Joined ✓" : "Join the list";
         join.disabled = sheet.joined;
         join.addEventListener("click", function () {
@@ -929,18 +995,12 @@
     sheet.code = code || null;
     sheet.joined = false;
     renderInstallSheet();
-    var dlg = $("install-sheet");
-    if (dlg.open) return;
-    if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", "");
-    $("install-title").focus();
+    openDialog($("install-sheet"), $("install-title"));
   }
-  function closeInstallSheet() {
-    var dlg = $("install-sheet");
-    if (typeof dlg.close === "function" && dlg.open) dlg.close(); else dlg.removeAttribute("open");
-  }
+  function closeInstallSheet() { closeDialog($("install-sheet")); }
 
   function initInstall() {
-    $("install-sheet").querySelector(".sheet-mark").innerHTML = document.querySelector(".brand-mark").innerHTML;
+    $("install-sheet").querySelector(".sheet-mark").innerHTML = document.querySelector(".app-mark").innerHTML;
     window.addEventListener("beforeinstallprompt", function (e) {
       e.preventDefault(); // we offer our own button instead of the browser's banner
       installPrompt = e;
@@ -970,7 +1030,7 @@
     $("install-copy").addEventListener("click", function () {
       var text = prettyCode(sheet.code || "");
       var btn = $("install-copy");
-      function done() { btn.textContent = "Copied!"; setTimeout(function () { btn.textContent = "Copy code"; }, 2000); }
+      function done() { btn.textContent = "Copied!"; setTimeout(function () { btn.textContent = "Copy Code"; }, 2000); }
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(done, function () { toast("Press and hold the code to copy it"); });
       } else {

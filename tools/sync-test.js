@@ -16,7 +16,7 @@ const os = require("os");
 const path = require("path");
 
 const ROOT = path.join(__dirname, "..");
-const FILES = ["index.html", "styles.css", "app.js", "sync.js", "manifest.json", "service-worker.js", "data", "icons", "fonts"];
+const FILES = ["index.html", "styles.css", "app.js", "sync.js", "manifest.json", "service-worker.js", "data", "icons"];
 const PORT = 8766;
 const BASE = `http://localhost:${PORT}/naruto-filler/`;
 const EMULATOR = process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080";
@@ -123,7 +123,17 @@ async function waitFor(fn, timeout = 8000) {
     const live = [1, 3, 4, 10];
     check("live: A tick + B untick reach both", same(await waitFor(async () => { const a = await watchedOf(A.page), b = await watchedOf(B.page); return same(a, live) && same(b, live) && a; }), live),
       `A=${await watchedOf(A.page)} B=${await watchedOf(B.page)}`);
-    check("live: progress text updated on A", (await A.page.textContent("#progress-all-text")).startsWith("4 / 220"));
+    check("live: progress text updated on A", (await A.page.textContent("#progress-all-text")) === "4 of 220");
+
+    // Marking several at once (and Undo) syncs too
+    await A.page.click("#bulk-open");
+    await A.page.fill("#bulk-from", "100");
+    await A.page.fill("#bulk-to", "105");
+    await A.page.click("#bulk-watch");
+    const withBulk = [...live, 100, 101, 102, 103, 104, 105];
+    check("bulk: marking 100–105 on A reaches B", same(await waitFor(async () => { const b = await watchedOf(B.page); return same(b, withBulk) && b; }, 10000), withBulk), (await watchedOf(B.page)).join(","));
+    await A.page.click(".toast-action");
+    check("bulk: Undo on A reaches B", same(await waitFor(async () => { const b = await watchedOf(B.page); return same(b, live) && b; }, 10000), live), (await watchedOf(B.page)).join(","));
 
     // B goes offline and makes changes; A changes in the meantime
     await B.context.setOffline(true);

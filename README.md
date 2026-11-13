@@ -15,16 +15,18 @@ To keep things simple, the site sorts episodes into just two categories:
 
 ## Features
 
-- **Episode list.** All 220 episodes, each with its number, title and a green Canon or red Filler badge. A legend explains the two.
-- **Filters.** Canon and Filler toggle buttons; turn one off to see only the other.
+- **Simple, Apple-style design.** It uses the system font (San Francisco on Apple devices), grouped lists like the iPhone Settings app, switches and segmented controls. Naruto orange is the accent color.
+- **Light and dark mode.** These follow the phone or computer's own setting automatically.
+- **Episode list.** All 220 episodes, each with its number and title. Filler episodes get a small **Filler** tag; anything without a tag is canon. One sentence under the list explains the difference.
+- **All / Canon / Filler.** A segmented control above the list shows everything, only canon, or only filler.
 - **Search.** One box that matches the episode number (`135`, `#135`, `ep 135`) or any part of the title. It ignores case and updates as you type. It works together with the filters.
 - **Watch tracker.**
-  - A checkbox on each episode, saved in `localStorage`.
-  - A progress ring and progress bars for all episodes (watched/220) and for canon only (watched/130).
-  - An **episode map**: one square per episode, colored by type and lit up once watched, with the next episode outlined. Tap a square to jump to that episode.
-  - A **Next episode to watch** button that scrolls to the first unwatched episode, with a **Skip filler** switch. If a filter or search hides that episode, the button changes them so you can see it.
+  - A round checkbox on each episode, saved in `localStorage`.
+  - A progress bar showing "40 of 220 watched", with the canon count underneath (out of 130).
+  - A **Continue** button that scrolls to the next unwatched episode. The **Skip filler when continuing** switch controls whether it skips filler. If the All / Canon / Filler control or the search hides that episode, the button changes them so you can see it.
+  - **Mark Several Episodes…**: pick a range (for example 1 to 80) and mark it all as watched or unwatched at once, optionally skipping filler. A message with **Undo** confirms it.
   - A **Hide watched** switch.
-  - **Reset progress**, which asks you to confirm first.
+  - **Reset Progress** at the bottom of the page, which asks you to confirm first.
 - **Watch together.** Two (or more) people can share one watched list through a free Firebase database. Episodes either of you ticks show up on the other's phone within a second or two, and changes made offline sync later. It's off until you add your own Firebase project; see [Shared progress (Firebase)](#shared-progress-firebase).
 - **Skip-filler guide.** A separate tab that lists the episodes to watch, collapsed into ranges, and the episodes to skip, with a map showing which to watch. Watch **1–25, 27–96, 98–100, 107–135, 141–142, 220** (130 episodes) and skip the 90 filler episodes, which saves about **34 h 30 min** at about 23 minutes per episode.
 - **PWA.** You can install it on a phone or desktop. Every file is saved on the first visit, so the whole app then works offline.
@@ -45,7 +47,6 @@ data/episodes.js      const EPISODES = [{ number, title, type }, ...]
 manifest.json         web app manifest
 service-worker.js     offline copy + network-first (always the newest version when online)
 icons/                Hidden Leaf symbol icons (192, 512, maskable 192/512, Apple 180, favicon, SVG)
-fonts/                Bebas Neue display font (self-hosted, 14 KB) and its license (OFL.txt)
 .nojekyll             tells GitHub Pages to serve the files as they are
 tools/                optional developer scripts (not needed to run the site)
   validate-data.js    checks there are exactly 220 episodes numbered 1–220 and prints counts per type
@@ -145,16 +146,16 @@ The config values aren't secret. Every Firebase web app sends them to the browse
 
 ### Using it
 
-1. On your phone, open the site and tap **Create list** in the **Watch together** card. Anything you've already ticked goes into the new list.
+1. On your phone, open the site and tap **Create List** in the **Watch Together** section. Anything you've already ticked goes into the new list.
 2. Tap **Invite** and send the link to the other person. On a phone this opens the share sheet; on desktop it copies the link.
 3. They open the link. On a phone, install instructions pop up, showing the list's code.
-   - **iPhone:** an app added to the Home Screen keeps its data separate from Safari. So they copy the code, add the app to the Home Screen, open it, tap **Join with a code** and paste.
+   - **iPhone:** an app added to the Home Screen keeps its data separate from Safari. So they copy the code, add the app to the Home Screen, open it, tap **Join with a Code** and paste.
    - **Android:** they tap **Join the list** in the pop-up, then install. The installed app keeps the joined list.
    - **Desktop, or to skip installing:** they tap **Join** in the Watch together card.
 
    Anything they had already ticked is merged in.
 
-**Join with a code** accepts the 16-character code shown on the card (for example `KFMQ-K7JP-AQ9N-CBG8`) or the whole invite link. Upper or lower case and dashes don't matter.
+**Join with a Code** accepts the 16-character code shown on the card (for example `KFMQ-K7JP-AQ9N-CBG8`) or the whole invite link. Upper or lower case and dashes don't matter.
 
 From then on:
 
@@ -231,7 +232,7 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
 
 - **Data:** each type's episode list matches Anime Filler List's published range lists.
 - **`file://`:** the page renders, has no errors, doesn't try to register a service worker, and keeps watched episodes.
-- **Filters:** canon only, filler only, and none selected, which shows an empty state.
+- **All / Canon / Filler:** each option shows the right episodes, and a search with no matches shows an empty state.
 - **Search:** case-insensitive title matches, number matches, and search combined with the filler filter.
 - **Tracker:**
   - both progress counts
@@ -240,9 +241,16 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
   - hiding watched episodes
   - watched episodes surviving a reload
   - reset with both confirm and cancel
-- **Episode map and ring:** the map lights up watched episodes and marks the next one, tapping a square jumps to it, and the ring shows the right percentage.
-- **Categories:** only Canon and Filler appear, and a *mixed* episode shows as Canon.
-- **Guide:** ranges, counts, time saved and the map.
+- **Categories:** only the 90 filler episodes are tagged, so a *mixed* episode counts as canon.
+- **Mark Several Episodes:**
+  - marking a range, with and without filler
+  - a reversed range (for example 40 to 35)
+  - **Mark as Unwatched**
+  - **Undo**
+  - rejecting numbers outside 1–220
+  - changes surviving a reload
+- **Light and dark mode:** the page follows the device setting.
+- **Guide:** ranges, counts, time saved and the map, and tapping a square jumps to that episode.
 - **PWA:**
   - the service worker registers with the subpath scope and controls the page
   - the first visit doesn't trigger an unexpected reload
@@ -277,14 +285,14 @@ node tools/sync-test.js
 
 It checks:
 
-- **Create and join:** creating a list; joining through an invite link, and by pasting a code or the whole link into **Join with a code**; the two devices' existing progress being merged; error messages for unknown and badly formed codes.
-- **Live sync:** ticks and unticks going both ways, and reset clearing the other device.
+- **Create and join:** creating a list; joining through an invite link, and by pasting a code or the whole link into **Join with a Code**; the two devices' existing progress being merged; error messages for unknown and badly formed codes.
+- **Live sync:** ticks and unticks going both ways, marking several episodes and **Undo** reaching the other device, and reset clearing the other device.
 - **Offline:** changes made offline converging with the other device's changes after reconnecting, including a change made offline just before the app was closed.
 - **Leave:** stopping sharing, and staying left after a reload.
 - **Security rules:** listing rooms, malformed codes, unexpected fields, deletes, and other collections are all refused.
 
-The last runs passed all 91 checks in `e2e-test.js` and all 31 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 99**, including "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
+The last runs passed all 108 checks in `e2e-test.js` and all 33 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 99** in light mode, and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
 
 ## Legal
 
-This is an unofficial fan project. It isn't affiliated with or endorsed by Masashi Kishimoto, Shueisha, Studio Pierrot, TV Tokyo or VIZ Media. The logo and app icons show the Hidden Leaf village symbol from *Naruto*, redrawn for this site (`tools/make-icons.js`). The site uses no official artwork or character images. The symbol belongs to its owners, and it's used here only to identify the show. The headings use [Bebas Neue](https://github.com/dharmatype/Bebas-Neue) by Dharma Type, under the SIL Open Font License 1.1 (see `fonts/OFL.txt`). Episode titles are listed for identification only.
+This is an unofficial fan project. It isn't affiliated with or endorsed by Masashi Kishimoto, Shueisha, Studio Pierrot, TV Tokyo or VIZ Media. The logo and app icons show the Hidden Leaf village symbol from *Naruto*, redrawn for this site (`tools/make-icons.js`). The site uses no official artwork or character images. The symbol belongs to its owners, and it's used here only to identify the show. Episode titles are listed for identification only.

@@ -6,14 +6,18 @@
   <title>Naruto Filler Guide</title>
   <meta name="description" content="Which episodes of the original Naruto anime (1–220) are filler and which are canon, with a watch tracker and a skip-filler guide. Works offline.">
 
+  <!-- Light and dark mode follow the device setting -->
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f2f2f7">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000">
+
   <!-- PWA -->
   <link rel="manifest" href="./manifest.json">
-  <meta name="theme-color" content="#14110f">
   <meta name="mobile-web-app-capable" content="yes">
 
   <!-- iOS -->
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Naruto Filler">
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
 
@@ -31,212 +35,214 @@
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
 
-  <header class="app-header">
-    <div class="header-inner">
-      <div class="brand">
-        <span class="brand-mark" aria-hidden="true"><!-- leaf:start --><svg class="brand-leaf" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><path d="M83.6 24.8L94.0 14.8M83.6 24.8C82.7 24.3 80.2 22.4 78.4 21.4C76.6 20.4 74.6 19.6 72.7 18.9C70.8 18.3 68.8 17.8 66.8 17.5C64.8 17.2 62.7 17.0 60.7 17.1C58.7 17.1 56.7 17.3 54.7 17.6C52.8 18.0 50.9 18.5 49.0 19.2C47.2 19.9 45.4 20.8 43.7 21.8C42.0 22.8 40.4 24.0 38.9 25.2C37.4 26.5 36.1 27.9 34.8 29.4C33.6 30.9 32.5 32.5 31.5 34.1C30.6 35.8 29.8 37.6 29.1 39.4C28.4 41.1 27.9 43.0 27.6 44.9C27.2 46.7 27.0 48.7 27.0 50.5C27.0 52.4 27.1 54.4 27.3 56.2C27.6 58.1 28.0 60.0 28.6 61.8C29.1 63.6 29.8 65.4 30.7 67.1C31.6 68.8 32.6 70.5 33.7 72.0C34.8 73.6 36.1 75.1 37.5 76.4C38.9 77.7 40.5 79.0 42.1 80.0C43.7 81.1 45.5 82.0 47.3 82.8C49.1 83.5 51.0 84.1 52.9 84.5C54.8 84.9 56.8 85.1 58.8 85.2C60.7 85.2 62.7 85.0 64.6 84.6C66.5 84.3 68.4 83.7 70.2 83.0C72.0 82.2 73.7 81.3 75.3 80.3C76.9 79.2 78.4 78.0 79.8 76.7C81.2 75.4 82.4 73.9 83.5 72.4C84.6 70.9 85.5 69.3 86.3 67.7C87.1 66.0 87.7 64.3 88.2 62.6C88.6 60.8 88.9 59.0 89.0 57.3C89.2 55.5 89.1 53.8 88.9 52.1C88.7 50.4 88.3 48.7 87.8 47.1C87.3 45.5 86.6 43.9 85.8 42.5C85.0 41.0 84.0 39.7 82.9 38.5C81.8 37.3 80.6 36.3 79.4 35.4C78.1 34.5 76.8 33.8 75.5 33.2C74.2 32.6 72.9 32.2 71.6 31.8C70.3 31.5 69.1 31.2 67.8 31.1C66.6 30.9 65.4 30.8 64.3 30.8C63.2 30.7 62.0 30.8 61.0 30.9C59.9 31.1 58.8 31.3 57.8 31.6C56.9 31.9 55.9 32.3 55.0 32.8C54.1 33.2 53.3 33.8 52.5 34.4C51.7 35.0 51.0 35.6 50.4 36.4C49.8 37.1 49.3 37.9 48.8 38.7C48.3 39.5 47.9 40.3 47.6 41.2C47.3 42.0 47.1 42.9 46.9 43.8C46.7 44.7 46.6 45.6 46.5 46.5C46.5 47.4 46.5 48.3 46.5 49.1C46.6 50.0 46.7 50.9 46.9 51.8C47.1 52.6 47.4 53.5 47.7 54.3C48.0 55.2 48.4 56.0 48.9 56.8C49.4 57.6 49.9 58.4 50.6 59.1C51.2 59.8 51.9 60.5 52.6 61.1C53.4 61.7 54.2 62.3 55.0 62.8C55.9 63.3 56.8 63.7 57.8 64.1C58.7 64.4 59.7 64.7 60.7 64.9C61.7 65.0 62.7 65.1 63.7 65.1C64.7 65.1 65.8 65.0 66.7 64.9C67.7 64.7 68.7 64.4 69.6 64.1C70.5 63.7 71.4 63.3 72.2 62.8C73.0 62.4 73.8 61.8 74.4 61.2C75.1 60.6 75.7 60.0 76.2 59.3C76.7 58.6 77.2 57.9 77.5 57.2C77.8 56.5 78.0 55.7 78.1 55.0C78.2 54.2 78.1 53.5 78.0 52.8C77.8 52.1 77.6 51.5 77.3 50.9C77.1 50.4 76.7 49.8 76.3 49.4C76.0 49.0 75.6 48.6 75.1 48.3C74.7 48.0 74.2 47.8 73.8 47.6C73.3 47.5 72.8 47.4 72.3 47.4C71.9 47.4 71.2 47.5 70.9 47.5M35.7 28.4Q16.8 47.9 6.0 76.8Q29.1 86.2 60.8 85.1"/></svg><!-- leaf:end --></span>
-        <div>
-          <h1>Naruto <span class="h1-accent">Filler</span> Guide</h1>
-          <p class="subtitle">Original series · episodes 1–220</p>
-        </div>
-        <button type="button" id="get-app" class="get-app" hidden>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14"/></svg>
-          <span>Get app</span>
-        </button>
+  <header class="top">
+    <div class="top-inner">
+      <div class="title-row">
+        <span class="app-mark" aria-hidden="true"><!-- leaf:start --><svg class="app-leaf" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><path d="M83.6 24.8L94.0 14.8M83.6 24.8C82.7 24.3 80.2 22.4 78.4 21.4C76.6 20.4 74.6 19.6 72.7 18.9C70.8 18.3 68.8 17.8 66.8 17.5C64.8 17.2 62.7 17.0 60.7 17.1C58.7 17.1 56.7 17.3 54.7 17.6C52.8 18.0 50.9 18.5 49.0 19.2C47.2 19.9 45.4 20.8 43.7 21.8C42.0 22.8 40.4 24.0 38.9 25.2C37.4 26.5 36.1 27.9 34.8 29.4C33.6 30.9 32.5 32.5 31.5 34.1C30.6 35.8 29.8 37.6 29.1 39.4C28.4 41.1 27.9 43.0 27.6 44.9C27.2 46.7 27.0 48.7 27.0 50.5C27.0 52.4 27.1 54.4 27.3 56.2C27.6 58.1 28.0 60.0 28.6 61.8C29.1 63.6 29.8 65.4 30.7 67.1C31.6 68.8 32.6 70.5 33.7 72.0C34.8 73.6 36.1 75.1 37.5 76.4C38.9 77.7 40.5 79.0 42.1 80.0C43.7 81.1 45.5 82.0 47.3 82.8C49.1 83.5 51.0 84.1 52.9 84.5C54.8 84.9 56.8 85.1 58.8 85.2C60.7 85.2 62.7 85.0 64.6 84.6C66.5 84.3 68.4 83.7 70.2 83.0C72.0 82.2 73.7 81.3 75.3 80.3C76.9 79.2 78.4 78.0 79.8 76.7C81.2 75.4 82.4 73.9 83.5 72.4C84.6 70.9 85.5 69.3 86.3 67.7C87.1 66.0 87.7 64.3 88.2 62.6C88.6 60.8 88.9 59.0 89.0 57.3C89.2 55.5 89.1 53.8 88.9 52.1C88.7 50.4 88.3 48.7 87.8 47.1C87.3 45.5 86.6 43.9 85.8 42.5C85.0 41.0 84.0 39.7 82.9 38.5C81.8 37.3 80.6 36.3 79.4 35.4C78.1 34.5 76.8 33.8 75.5 33.2C74.2 32.6 72.9 32.2 71.6 31.8C70.3 31.5 69.1 31.2 67.8 31.1C66.6 30.9 65.4 30.8 64.3 30.8C63.2 30.7 62.0 30.8 61.0 30.9C59.9 31.1 58.8 31.3 57.8 31.6C56.9 31.9 55.9 32.3 55.0 32.8C54.1 33.2 53.3 33.8 52.5 34.4C51.7 35.0 51.0 35.6 50.4 36.4C49.8 37.1 49.3 37.9 48.8 38.7C48.3 39.5 47.9 40.3 47.6 41.2C47.3 42.0 47.1 42.9 46.9 43.8C46.7 44.7 46.6 45.6 46.5 46.5C46.5 47.4 46.5 48.3 46.5 49.1C46.6 50.0 46.7 50.9 46.9 51.8C47.1 52.6 47.4 53.5 47.7 54.3C48.0 55.2 48.4 56.0 48.9 56.8C49.4 57.6 49.9 58.4 50.6 59.1C51.2 59.8 51.9 60.5 52.6 61.1C53.4 61.7 54.2 62.3 55.0 62.8C55.9 63.3 56.8 63.7 57.8 64.1C58.7 64.4 59.7 64.7 60.7 64.9C61.7 65.0 62.7 65.1 63.7 65.1C64.7 65.1 65.8 65.0 66.7 64.9C67.7 64.7 68.7 64.4 69.6 64.1C70.5 63.7 71.4 63.3 72.2 62.8C73.0 62.4 73.8 61.8 74.4 61.2C75.1 60.6 75.7 60.0 76.2 59.3C76.7 58.6 77.2 57.9 77.5 57.2C77.8 56.5 78.0 55.7 78.1 55.0C78.2 54.2 78.1 53.5 78.0 52.8C77.8 52.1 77.6 51.5 77.3 50.9C77.1 50.4 76.7 49.8 76.3 49.4C76.0 49.0 75.6 48.6 75.1 48.3C74.7 48.0 74.2 47.8 73.8 47.6C73.3 47.5 72.8 47.4 72.3 47.4C71.9 47.4 71.2 47.5 70.9 47.5M35.7 28.4Q16.8 47.9 6.0 76.8Q29.1 86.2 60.8 85.1"/></svg><!-- leaf:end --></span>
+        <button type="button" id="get-app" class="pill-button" hidden>Get App</button>
       </div>
-      <nav class="tabs" role="tablist" aria-label="Sections">
-        <button type="button" role="tab" id="tab-episodes" aria-controls="panel-episodes" aria-selected="true">Episodes</button>
-        <button type="button" role="tab" id="tab-guide" aria-controls="panel-guide" aria-selected="false" tabindex="-1">Skip-filler guide</button>
-      </nav>
+      <h1 class="large-title">Naruto Filler Guide</h1>
+      <p class="subtitle">Original series · 220 episodes</p>
     </div>
   </header>
+
+  <div class="tabbar">
+    <nav class="segmented tabs" role="tablist" aria-label="Sections">
+      <button type="button" role="tab" id="tab-episodes" aria-controls="panel-episodes" aria-selected="true">Episodes</button>
+      <button type="button" role="tab" id="tab-guide" aria-controls="panel-guide" aria-selected="false" tabindex="-1">Skip Guide</button>
+    </nav>
+  </div>
 
   <main id="main" class="container">
     <!-- ============ Episodes ============ -->
     <section id="panel-episodes" role="tabpanel" aria-labelledby="tab-episodes">
-      <div class="card tracker hero" aria-labelledby="tracker-title">
-        <div class="tracker-top">
-          <div class="ring" id="progress-ring" aria-hidden="true">
-            <div class="ring-track"></div>
-            <div class="ring-inner">
-              <span class="ring-value" id="ring-value">0%</span>
-              <span class="ring-label">watched</span>
-            </div>
-          </div>
-          <div class="tracker-bars">
-            <h2 id="tracker-title" class="card-title">Your progress</h2>
 
-            <div class="progress-row">
-              <div class="progress-label">
-                <span>All episodes</span>
-                <span id="progress-all-text" class="progress-value">0 / 220</span>
-              </div>
-              <div class="progress-track"><div id="progress-all-bar" class="progress-bar" role="progressbar" aria-label="All episodes watched" aria-valuemin="0" aria-valuemax="220" aria-valuenow="0"></div></div>
-            </div>
-
-            <div class="progress-row">
-              <div class="progress-label">
-                <span>Canon episodes</span>
-                <span id="progress-canon-text" class="progress-value">0 / 0</span>
-              </div>
-              <div class="progress-track"><div id="progress-canon-bar" class="progress-bar progress-bar--canon" role="progressbar" aria-label="Canon episodes watched" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"></div></div>
-            </div>
-          </div>
+      <section class="group padded progress" aria-labelledby="tracker-title">
+        <div class="progress-head">
+          <h2 id="tracker-title" class="progress-title"><span id="progress-all-text">0 of 220</span> watched</h2>
+          <span id="progress-percent" class="progress-percent">0%</span>
         </div>
+        <div class="progress-track"><div id="progress-all-bar" class="progress-bar" role="progressbar" aria-label="Episodes watched" aria-valuemin="0" aria-valuemax="220" aria-valuenow="0"></div></div>
+        <p id="progress-canon-text" class="footnote">0 of 130 canon episodes</p>
 
-        <div class="map-block">
-          <div class="ep-map" id="ep-map" aria-hidden="true"></div>
-          <p class="map-caption"><span>Every episode, 1–220.</span> <span>Bright squares are watched; tap one to jump to it.</span></p>
-        </div>
-
-        <div class="tracker-actions">
-          <button type="button" id="next-button" class="btn btn-primary">
-            <span class="btn-main">Next episode to watch</span>
+        <button type="button" id="next-button" class="button-filled continue">
+          <svg class="play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
+          <span class="continue-text">
+            <span id="next-label" class="btn-main">Continue</span>
             <span id="next-hint" class="btn-sub"></span>
-          </button>
-          <label class="switch">
-            <input type="checkbox" id="skip-filler-next">
-            <span class="switch-ui" aria-hidden="true"></span>
-            <span>Skip filler</span>
-          </label>
-        </div>
+          </span>
+        </button>
+      </section>
 
-        <div class="reset-area">
-          <button type="button" id="reset-button" class="btn btn-ghost">Reset progress</button>
-          <div id="reset-confirm" class="reset-confirm" hidden>
-            <span id="reset-question">Clear all watched episodes?</span>
-            <button type="button" id="reset-yes" class="btn btn-danger">Yes, reset</button>
-            <button type="button" id="reset-cancel" class="btn btn-ghost">Cancel</button>
-          </div>
-        </div>
+      <div class="group">
+        <label class="row">
+          <span class="row-label">Skip filler when continuing</span>
+          <input type="checkbox" id="skip-filler-next" class="switch" role="switch">
+        </label>
+        <button type="button" id="bulk-open" class="row row-button">
+          <span class="row-label">Mark Several Episodes…</span>
+          <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
       </div>
 
-      <div class="card sync" id="sync-card" aria-labelledby="sync-title">
-        <div class="sync-head">
-          <h2 id="sync-title" class="card-title">Watch together</h2>
-          <span id="sync-status" class="sync-status" data-state="connecting" role="status" hidden>Connecting…</span>
-        </div>
+      <h2 id="sync-title" class="section-header">Watch Together</h2>
+      <div class="group padded sync" id="sync-card" aria-labelledby="sync-title">
+        <span id="sync-status" class="sync-status" data-state="connecting" role="status" hidden>Connecting…</span>
 
-        <p id="sync-unavailable" class="muted small sync-text" hidden><span id="sync-unavailable-text"></span></p>
+        <p id="sync-unavailable" class="footnote sync-text" hidden><span id="sync-unavailable-text"></span></p>
 
         <div id="sync-setup" hidden>
-          <p class="muted small sync-text">Share one watched list with someone. Episodes either of you ticks show up on both devices.</p>
-          <div class="sync-buttons">
-            <button type="button" id="sync-create" class="btn">Create list</button>
-            <button type="button" id="sync-join-toggle" class="btn btn-ghost">Join with a code</button>
+          <p class="footnote sync-text">Share one watched list with someone. Episodes either of you checks off show up on both devices.</p>
+          <div class="button-row">
+            <button type="button" id="sync-create" class="button-tinted">Create List</button>
+            <button type="button" id="sync-join-toggle" class="button-tinted">Join with a Code</button>
           </div>
           <form id="sync-join-form" class="sync-join" hidden>
             <label class="visually-hidden" for="sync-code">Shared list code</label>
-            <input id="sync-code" type="text" placeholder="Code or invite link" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="300" enterkeyhint="go">
-            <button type="submit" id="sync-join-submit" class="btn">Join</button>
+            <input id="sync-code" class="text-field" type="text" placeholder="Code or invite link" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="300" enterkeyhint="go">
+            <button type="submit" id="sync-join-submit" class="button-filled small">Join</button>
           </form>
         </div>
 
         <div id="sync-connected" hidden>
-          <p class="sync-text small">Shared list <code id="sync-code-display" class="sync-code"></code></p>
-          <div class="sync-buttons">
-            <button type="button" id="sync-invite" class="btn">Invite</button>
-            <button type="button" id="sync-leave" class="btn btn-ghost">Leave</button>
+          <p class="sync-text">Shared list <code id="sync-code-display" class="sync-code"></code></p>
+          <div class="button-row">
+            <button type="button" id="sync-invite" class="button-tinted">Invite</button>
+            <button type="button" id="sync-leave" class="button-tinted destructive">Leave</button>
           </div>
         </div>
 
         <div id="sync-invite-prompt" hidden>
-          <p class="sync-text small" id="sync-invite-text"></p>
-          <div class="sync-buttons">
-            <button type="button" id="sync-invite-accept" class="btn btn-primary-sm">Join</button>
-            <button type="button" id="sync-invite-decline" class="btn btn-ghost">Not now</button>
+          <p class="sync-text" id="sync-invite-text"></p>
+          <div class="button-row">
+            <button type="button" id="sync-invite-accept" class="button-filled">Join</button>
+            <button type="button" id="sync-invite-decline" class="button-tinted">Not Now</button>
           </div>
         </div>
 
-        <p id="sync-message" class="sync-message small" hidden></p>
+        <p id="sync-message" class="sync-message footnote" hidden></p>
       </div>
 
+      <h2 class="section-header" id="episodes-title">Episodes</h2>
       <div class="toolbar">
         <label class="search">
           <span class="visually-hidden">Search episodes</span>
           <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-          <input type="search" id="search" placeholder="Search by number or title…" autocomplete="off" spellcheck="false" enterkeyhint="search">
+          <input type="search" id="search" placeholder="Search" autocomplete="off" spellcheck="false" enterkeyhint="search">
         </label>
-
-        <div class="filters" role="group" aria-label="Filter by episode type" id="filters"></div>
-
+        <div class="segmented show" id="filters" role="radiogroup" aria-label="Show"></div>
+        <p class="footnote legend-note"><strong>Canon</strong> episodes tell the manga's story. <strong>Filler</strong> episodes are anime-only and safe to skip.</p>
         <div class="toolbar-row">
-          <p id="result-count" class="result-count" aria-live="polite"></p>
-          <label class="switch switch--small">
-            <input type="checkbox" id="hide-watched">
-            <span class="switch-ui" aria-hidden="true"></span>
+          <p id="result-count" class="footnote result-count" aria-live="polite"></p>
+          <label class="inline-switch">
             <span>Hide watched</span>
+            <input type="checkbox" id="hide-watched" class="switch small" role="switch">
           </label>
         </div>
       </div>
 
-      <details class="legend card">
-        <summary>What do the types mean?</summary>
-        <dl id="legend-list"></dl>
-      </details>
+      <ol id="episode-list" class="group episode-list" aria-labelledby="episodes-title"></ol>
+      <p id="empty-state" class="empty-state" hidden>No episodes match your search.</p>
 
-      <ol id="episode-list" class="episode-list" aria-label="Episodes"></ol>
-      <p id="empty-state" class="empty-state" hidden>No episodes match. Try a different search or turn on more types.</p>
+      <div class="group reset-group">
+        <button type="button" id="reset-button" class="row row-button destructive">Reset Progress</button>
+        <div id="reset-confirm" class="reset-confirm" hidden>
+          <p id="reset-question" class="footnote">Clear all watched episodes?</p>
+          <div class="button-row">
+            <button type="button" id="reset-yes" class="button-filled destructive">Reset</button>
+            <button type="button" id="reset-cancel" class="button-tinted">Cancel</button>
+          </div>
+        </div>
+      </div>
     </section>
 
     <!-- ============ Skip-filler guide ============ -->
     <section id="panel-guide" role="tabpanel" aria-labelledby="tab-guide" hidden>
-      <div class="card">
-        <h2 class="card-title">Watch order without filler</h2>
-        <p class="muted">Watch the canon episodes in order and skip the filler.</p>
-
+      <section class="group padded" aria-labelledby="guide-title">
+        <h2 id="guide-title" class="group-title">Skip the Filler</h2>
+        <p class="footnote">Watch these episodes in order and skip the rest.</p>
         <div class="stats">
           <div class="stat">
             <span class="stat-value" id="guide-watch-count">0</span>
-            <span class="stat-label">episodes to watch</span>
+            <span class="stat-label">to watch</span>
           </div>
           <div class="stat">
             <span class="stat-value" id="guide-skip-count">0</span>
-            <span class="stat-label">episodes skipped</span>
+            <span class="stat-label">skipped</span>
           </div>
           <div class="stat stat--accent">
             <span class="stat-value" id="guide-time-saved">0</span>
-            <span class="stat-label">time saved (≈23 min/ep)</span>
+            <span class="stat-label">saved (~23 min each)</span>
           </div>
         </div>
-        <p class="muted small" id="guide-watch-time"></p>
-
+        <p class="footnote" id="guide-watch-time"></p>
         <div class="map-block">
           <div class="ep-map" id="guide-map" aria-hidden="true"></div>
-          <p class="map-caption"><span>Bright squares are the episodes to watch;</span> <span>faded ones are skipped.</span></p>
+          <p class="footnote map-caption">Each square is an episode. Colored squares are canon; gray ones are filler. Tap one to jump to it.</p>
         </div>
-      </div>
+      </section>
 
-      <div class="card">
-        <h3 class="card-title">Episodes to watch</h3>
+      <h2 class="section-header">Episodes to Watch</h2>
+      <section class="group padded">
         <ul id="guide-watch-ranges" class="range-list" aria-label="Episode ranges to watch"></ul>
         <p class="range-text" id="guide-watch-text"></p>
-      </div>
+      </section>
 
-      <div class="card">
-        <h3 class="card-title">Episodes to skip</h3>
+      <h2 class="section-header">Episodes to Skip</h2>
+      <section class="group padded">
         <ul id="guide-skip-ranges" class="range-list range-list--skip" aria-label="Episode ranges to skip"></ul>
         <p class="range-text" id="guide-skip-text"></p>
-      </div>
+      </section>
     </section>
   </main>
 
   <footer class="app-footer">
     <p>Classifications from <a href="https://www.animefillerlist.com/shows/naruto" rel="noopener" target="_blank">Anime Filler List</a>, cross-checked with the <a href="https://naruto.fandom.com/wiki/List_of_Animated_Media" rel="noopener" target="_blank">Naruto Fandom wiki</a>.</p>
     <p>Fan-made and unofficial. Not affiliated with the creators, publishers or broadcasters of Naruto.</p>
-    <p id="file-note" class="small" hidden>You opened this page from a file, so it can't be installed as an app or cached for offline use. Host it (e.g. on GitHub Pages) to enable that. Your watched list still saves.</p>
+    <p id="file-note" hidden>You opened this page from a file, so it can't be installed as an app or saved for offline use. Host it (for example on GitHub Pages) to turn that on. Your watched list still saves.</p>
   </footer>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+  <!-- Mark several episodes at once -->
+  <dialog id="bulk-sheet" class="sheet" aria-labelledby="bulk-title">
+    <form id="bulk-form" class="sheet-inner" novalidate>
+      <div class="sheet-head">
+        <h2 id="bulk-title" class="sheet-title">Mark Several Episodes</h2>
+        <button type="button" id="bulk-close" class="sheet-close" aria-label="Close">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+        </button>
+      </div>
+      <div class="group inset">
+        <label class="row">
+          <span class="row-label">From episode</span>
+          <input id="bulk-from" class="number-field" type="number" inputmode="numeric" min="1" max="220" value="1">
+        </label>
+        <label class="row">
+          <span class="row-label">To episode</span>
+          <input id="bulk-to" class="number-field" type="number" inputmode="numeric" min="1" max="220" placeholder="e.g. 80">
+        </label>
+        <label class="row">
+          <span class="row-label">Skip filler episodes</span>
+          <input type="checkbox" id="bulk-skip-filler" class="switch" role="switch">
+        </label>
+      </div>
+      <p id="bulk-summary" class="footnote bulk-summary" aria-live="polite"></p>
+      <div class="sheet-actions stacked">
+        <button type="submit" id="bulk-watch" class="button-filled">Mark as Watched</button>
+        <button type="button" id="bulk-unwatch" class="button-plain">Mark as Unwatched</button>
+      </div>
+    </form>
+  </dialog>
 
   <!-- "Get the app" instructions. Opens by itself when an invite link is opened on a phone. -->
   <dialog id="install-sheet" class="sheet" aria-labelledby="install-title">
     <div class="sheet-inner">
       <div class="sheet-head">
-        <span class="brand-mark sheet-mark" aria-hidden="true"></span>
+        <span class="app-mark sheet-mark" aria-hidden="true"></span>
         <div class="sheet-heading">
-          <h2 id="install-title" class="sheet-title" tabindex="-1" autofocus>Get the app</h2>
-          <p id="install-sub" class="muted small"></p>
+          <h2 id="install-title" class="sheet-title" tabindex="-1" autofocus>Get the App</h2>
+          <p id="install-sub" class="footnote"></p>
         </div>
         <button type="button" id="install-close" class="sheet-close" aria-label="Close">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
@@ -244,19 +250,19 @@
       </div>
 
       <div id="install-invite" class="invite-box" hidden>
-        <p class="small"><strong>You've been invited to a shared watch list.</strong> Your code:</p>
+        <p class="footnote">You've been invited to a shared watch list. Your code:</p>
         <div class="invite-code-row">
           <code id="install-code" class="invite-code"></code>
-          <button type="button" id="install-copy" class="btn btn-small">Copy code</button>
+          <button type="button" id="install-copy" class="button-tinted small">Copy Code</button>
         </div>
       </div>
 
       <ol id="install-steps" class="steps"></ol>
-      <p id="install-note" class="muted small sheet-note" hidden></p>
+      <p id="install-note" class="footnote sheet-note" hidden></p>
 
-      <div class="sheet-actions">
-        <button type="button" id="install-native" class="btn btn-primary-sm" hidden>Install app</button>
-        <button type="button" id="install-later" class="btn btn-ghost">Maybe later</button>
+      <div class="sheet-actions stacked">
+        <button type="button" id="install-native" class="button-filled" hidden>Install App</button>
+        <button type="button" id="install-later" class="button-plain">Maybe Later</button>
       </div>
     </div>
   </dialog>

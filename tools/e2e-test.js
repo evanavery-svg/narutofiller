@@ -13,7 +13,7 @@ const path = require("path");
 const vm = require("vm");
 
 const ROOT = path.join(__dirname, "..");
-const FILES = ["index.html", "styles.css", "app.js", "sync.js", "firebase-config.js", "manifest.json", "service-worker.js", "data", "icons", "fonts"];
+const FILES = ["index.html", "styles.css", "app.js", "sync.js", "firebase-config.js", "manifest.json", "service-worker.js", "data", "icons"];
 const SW_VERSION = fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8").match(/CACHE_VERSION = "([^"]+)"/)[1];
 const PRECACHE_COUNT = (fs.readFileSync(path.join(ROOT, "service-worker.js"), "utf8").match(/const PRECACHE = \[([\s\S]*?)\]/)[1].match(/"\.\//g) || []).length;
 const PORT = 8765;
@@ -112,22 +112,22 @@ const collapse = (nums) => {
     check("sw: first visit installs without reloading the page", navigations === 1, navigations);
 
     const visibleNums = () => page.$$eval(".episode:not([hidden])", (els) => els.map((e) => Number(e.id.slice(3))));
-    const toggle = (t) => page.click(`.filter[data-type="${t}"]`);
+    const show = (v) => page.click(`#filters [data-show="${v}"]`);
 
     check("http: 220 episodes rendered", (await page.locator(".episode").count()) === 220);
-    check("http: legend lists 2 categories", (await page.locator("#legend-list .legend-item").count()) === 2);
-    check("categories: only Canon and Filler filters", (await page.$$eval(".filter", (b) => b.map((x) => x.dataset.type).join(","))) === "canon,filler");
-    check("categories: a 'mixed' episode (7) shows as Canon", (await page.textContent("#ep-7 .badge")) === "Canon");
-    check("categories: filler episode (26) shows as Filler", (await page.textContent("#ep-26 .badge")) === "Filler");
+    check("http: one-line explanation of canon vs filler", (await page.textContent(".legend-note")).includes("Filler"));
+    check("categories: All / Canon / Filler switcher", (await page.$$eval("#filters [data-show]", (b) => b.map((x) => x.dataset.show).join(","))) === "all,canon,filler");
+    check("categories: a 'mixed' episode (7) counts as canon (no Filler tag)", (await page.locator("#ep-7 .badge").count()) === 0);
+    check("categories: filler episode (26) is tagged Filler", (await page.textContent("#ep-26 .badge")) === "Filler");
+    check("categories: only the 90 filler episodes are tagged", (await page.locator(".episode .badge").count()) === 90);
     check("sync: not configured -> setup note, no buttons", (await page.locator("#sync-unavailable").isVisible()) && !(await page.locator("#sync-create").isVisible()));
 
     // Filters
-    await toggle("filler");
+    await show("canon");
     let v = await visibleNums();
-    check("filter: canon only (filler off)", v.length === 130 && v.every((n) => E[n - 1].type !== "filler"), v.length);
-    await toggle("canon");
-    check("filter: none selected shows empty state", (await visibleNums()).length === 0 && (await page.locator("#empty-state").isVisible()));
-    await toggle("filler");
+    check("filter: Canon", v.length === 130 && v.every((n) => E[n - 1].type !== "filler"), v.length);
+    check("filter: switcher shows the selection", (await page.getAttribute('#filters [data-show="canon"]', "aria-checked")) === "true");
+    await show("filler");
     v = await visibleNums();
     check("filter: filler only", v.length === 90 && v.every((n) => E[n - 1].type === "filler"), v.length);
 
@@ -136,7 +136,7 @@ const collapse = (nums) => {
     v = await visibleNums();
     const expectKakashiFiller = E.filter((e) => e.type === "filler" && e.title.toLowerCase().includes("kakashi")).map((e) => e.number);
     check("search+filter: 'KAKASHI' within filler (case-insensitive)", JSON.stringify(v) === JSON.stringify(expectKakashiFiller), v.join(","));
-    await toggle("canon");
+    await show("all");
     await page.fill("#search", "kakashi");
     v = await visibleNums();
     const expectKakashi = E.filter((e) => e.title.toLowerCase().includes("kakashi")).map((e) => e.number);
@@ -147,30 +147,26 @@ const collapse = (nums) => {
     check("search: '#7'", JSON.stringify(await visibleNums()) === "[7]");
     await page.fill("#search", "");
     check("search cleared: all 220 shown", (await visibleNums()).length === 220);
+    await page.fill("#search", "zzzz");
+    check("search: no match shows empty state", (await visibleNums()).length === 0 && (await page.locator("#empty-state").isVisible()));
+    await page.fill("#search", "");
 
     // Watch tracker
     for (const n of [1, 2, 3, 26]) await page.check(`#ep-${n} input`);
-    check("tracker: all progress 4/220", (await page.textContent("#progress-all-text")).startsWith("4 / 220"));
-    check("tracker: canon progress 3/130", (await page.textContent("#progress-canon-text")) === "3 / 130");
-    check("map: 220 squares in each map", (await page.locator("#ep-map .cell").count()) === 220 && (await page.locator("#guide-map .cell").count()) === 220);
-    check("map: watched squares lit", (await page.locator("#ep-map .cell.is-on").count()) === 4);
-    check("map: next episode marked", (await page.getAttribute("#ep-map .cell.is-next", "data-n")) === "4");
-    check("ring: shows 2%", (await page.textContent("#ring-value")) === "2%");
-    await page.fill("#search", "zzz");
-    await page.click('#ep-map .cell[data-n="150"]');
-    await page.waitForTimeout(700);
-    check("map: tapping a square jumps to that episode", await page.locator("#ep-150").isVisible() && (await page.locator("#ep-150.is-highlight").count()) === 1);
-    await page.fill("#search", "");
+    check("tracker: progress 4 of 220", (await page.textContent("#progress-all-text")) === "4 of 220");
+    check("tracker: percent 2%", (await page.textContent("#progress-percent")) === "2%");
+    check("tracker: canon progress 3 of 130", (await page.textContent("#progress-canon-text")) === "3 of 130 canon episodes");
+    check("tracker: button says Continue", (await page.textContent("#next-label")) === "Continue");
     // next ep (skip filler on by default)
     check("next: skip filler default -> ep 4", (await page.textContent("#next-hint")).startsWith("Ep 4 "));
     for (let n = 4; n <= 25; n++) await page.check(`#ep-${n} input`);
     await page.uncheck("#ep-26 input");
     check("next: skip filler -> ep 27 (skips 26)", (await page.textContent("#next-hint")).startsWith("Ep 27 "));
-    await page.click("#skip-filler-next + .switch-ui");
+    await page.click("#skip-filler-next");
     check("next: no skip -> ep 26", (await page.textContent("#next-hint")).startsWith("Ep 26 "));
-    await page.click("#skip-filler-next + .switch-ui");
+    await page.click("#skip-filler-next");
     // jump while filter hides target
-    await toggle("canon");
+    await show("filler");
     await page.fill("#search", "zzz");
     await page.click("#next-button");
     await page.waitForTimeout(700);
@@ -178,16 +174,16 @@ const collapse = (nums) => {
     check("next: target highlighted", await page.locator("#ep-27.is-highlight").count() === 1);
     check("next: target in viewport", await page.locator("#ep-27").evaluate((el) => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }));
     // hide watched
-    await page.click("#hide-watched + .switch-ui");
+    await page.click("#hide-watched");
     v = await visibleNums();
     check("hide watched: eps 1–25 hidden", v[0] === 26 && v.length === 195, v.length);
-    await page.click("#hide-watched + .switch-ui");
+    await page.click("#hide-watched");
 
     // persistence
     await page.reload();
     const checked = await page.$$eval(".episode input:checked", (els) => els.map((e) => Number(e.dataset.number)));
     check("persistence: watched survive reload", JSON.stringify(checked) === JSON.stringify(Array.from({ length: 25 }, (_, i) => i + 1)), checked.length);
-    check("persistence: progress after reload", (await page.textContent("#progress-all-text")).startsWith("25 / 220"));
+    check("persistence: progress after reload", (await page.textContent("#progress-all-text")) === "25 of 220");
 
     // reset confirm
     await page.click("#reset-button");
@@ -207,11 +203,60 @@ const collapse = (nums) => {
     check("guide: watch ranges match data", (await page.textContent("#guide-watch-text")) === watchAll, await page.textContent("#guide-watch-text"));
     check("guide: skip ranges match data", (await page.textContent("#guide-skip-text")) === collapse(expand(AFL.filler)));
     check("guide: count 130", (await page.textContent("#guide-watch-count")) === "130");
-    check("guide map: 130 squares lit", (await page.locator("#guide-map .cell.is-on").count()) === 130);
+    check("guide map: 220 squares, 130 lit", (await page.locator("#guide-map .cell").count()) === 220 && (await page.locator("#guide-map .cell.is-on").count()) === 130);
     check("guide: time saved 90×23 = 34 h 30 min", (await page.textContent("#guide-time-saved")) === "~34 h 30 min");
     await page.screenshot({ path: path.join(tmp, "guide-mobile.png"), fullPage: true });
-    await page.click("#tab-episodes");
+    await page.click('#guide-map .cell[data-n="150"]');
+    await page.waitForTimeout(700);
+    check("guide map: tapping a square jumps to that episode", await page.locator("#ep-150").isVisible() && (await page.locator("#ep-150.is-highlight").count()) === 1);
     await page.screenshot({ path: path.join(tmp, "episodes-mobile.png") });
+
+    // Mark several episodes at once
+    const bulkOpen = async () => { await page.click("#bulk-open"); return page.evaluate(() => document.getElementById("bulk-sheet").open); };
+    check("bulk: opens", await bulkOpen());
+    check("bulk: starts at episode 1, filler included", (await page.inputValue("#bulk-from")) === "1" && !(await page.isChecked("#bulk-skip-filler")));
+    check("bulk: needs a 'to' episode first", await page.isDisabled("#bulk-watch"));
+    await page.fill("#bulk-to", "30");
+    check("bulk: summary counts the range", (await page.textContent("#bulk-summary")).includes("30 episodes"), await page.textContent("#bulk-summary"));
+    await page.check("#bulk-skip-filler");
+    check("bulk: skipping filler leaves 29 (ep 26 is filler)", (await page.textContent("#bulk-summary")).includes("29 episodes") && (await page.textContent("#bulk-summary")).includes("1 filler skipped"), await page.textContent("#bulk-summary"));
+    await page.click("#bulk-watch");
+    let w = await page.$$eval(".episode input:checked", (els) => els.map((e) => Number(e.dataset.number)));
+    check("bulk: marked 1–30 except filler 26", w.length === 29 && !w.includes(26) && w.includes(30), w.join(","));
+    check("bulk: sheet closed", !(await page.evaluate(() => document.getElementById("bulk-sheet").open)));
+    check("bulk: progress updated", (await page.textContent("#progress-all-text")) === "29 of 220");
+    check("bulk: offers Undo", (await page.textContent("#toast")).includes("Marked 29 episodes") && await page.isVisible(".toast-action"));
+    await page.click(".toast-action");
+    check("bulk: Undo restores", (await page.locator(".episode input:checked").count()) === 0);
+    await bulkOpen();
+    await page.fill("#bulk-from", "40");
+    await page.fill("#bulk-to", "35"); // reversed range is fine
+    await page.click("#bulk-watch");
+    w = await page.$$eval(".episode input:checked", (els) => els.map((e) => Number(e.dataset.number)));
+    check("bulk: reversed range 40→35 marks 35–40", JSON.stringify(w) === "[35,36,37,38,39,40]", w.join(","));
+    await bulkOpen();
+    await page.fill("#bulk-from", "38");
+    await page.fill("#bulk-to", "40");
+    await page.click("#bulk-unwatch");
+    w = await page.$$eval(".episode input:checked", (els) => els.map((e) => Number(e.dataset.number)));
+    check("bulk: Mark as Unwatched clears 38–40", JSON.stringify(w) === "[35,36,37]", w.join(","));
+    await page.reload();
+    check("bulk: changes are saved", (await page.locator(".episode input:checked").count()) === 3);
+    await bulkOpen();
+    await page.fill("#bulk-to", "999");
+    check("bulk: out-of-range number is rejected", await page.isDisabled("#bulk-watch") && (await page.textContent("#bulk-summary")).includes("from 1 to 220"));
+    await page.keyboard.press("Escape");
+    check("bulk: Escape closes", !(await page.evaluate(() => document.getElementById("bulk-sheet").open)));
+    await bulkOpen();
+    await page.fill("#bulk-from", "35");
+    await page.fill("#bulk-to", "37");
+    await page.click("#bulk-unwatch");
+
+    // Light and dark mode follow the device
+    const bgOf = async (scheme) => { await page.emulateMedia({ colorScheme: scheme }); return page.evaluate(() => getComputedStyle(document.body).backgroundColor); };
+    check("theme: light mode", (await bgOf("light")) === "rgb(242, 242, 247)", await bgOf("light"));
+    check("theme: dark mode", (await bgOf("dark")) === "rgb(0, 0, 0)", await bgOf("dark"));
+    await page.emulateMedia({ colorScheme: "light" });
     check("mobile: no horizontal scroll", await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
 
     // ================= PWA =================
@@ -308,7 +353,7 @@ const collapse = (nums) => {
       check(`install (${name}): shows the code`, (await p.textContent("#install-code")) === "KFMQ-K7JP-AQ9N-CBG8");
       const steps = await p.$$eval("#install-steps li", (els) => els.map((e) => e.textContent));
       if (name === "iPhone") {
-        check("install (iPhone): Share → Add to Home Screen → Add → join with code", steps.length === 4 && /Share/.test(steps[0]) && /Add to Home Screen/.test(steps[1]) && /Join with a code/.test(steps[3]), steps.join(" / "));
+        check("install (iPhone): Share → Add to Home Screen → Add → join with code", steps.length === 4 && /Share/.test(steps[0]) && /Add to Home Screen/.test(steps[1]) && /Join with a Code/.test(steps[3]), steps.join(" / "));
         check("install (iPhone): explains why to copy the code", await p.isVisible("#install-note"));
       } else {
         check("install (Android): join step, then browser-menu install", /Join the shared list/.test(steps[0]) && /Install app|Add to Home screen/.test(steps[1]), steps.join(" / "));

@@ -8,7 +8,7 @@
  * A new version of this file takes over immediately (no "update available" step).
  * Bump CACHE_VERSION only when the PRECACHE list changes.
  */
-const CACHE_VERSION = "v2.0.0";
+const CACHE_VERSION = "v2.1.0";
 const CACHE_NAME = "naruto-filler-" + CACHE_VERSION;
 const NETWORK_TIMEOUT_MS = 3500;
 
@@ -28,8 +28,7 @@ const PRECACHE = [
   "./icons/icon-maskable-192.png",
   "./icons/icon-maskable-512.png",
   "./icons/apple-touch-icon.png",
-  "./icons/favicon-32.png",
-  "./fonts/bebas-neue-latin-400.woff2"
+  "./icons/favicon-32.png"
 ];
 
 // Text files compared when the app asks "has anything changed?" (on returning to the app)
