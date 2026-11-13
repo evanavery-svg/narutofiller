@@ -54,11 +54,11 @@
 
     <section class="progress" aria-labelledby="tracker-title">
       <div class="progress-head">
-        <h2 id="tracker-title" class="progress-title"><span id="progress-all-text">0 of 220</span> watched</h2>
+        <h2 id="tracker-title" class="progress-title"><span id="progress-canon-text">0 of 130</span> canon watched</h2>
         <button type="button" id="sync-chip" class="sync-chip" data-state="connecting" hidden>Shared</button>
-        <span id="progress-canon-text" class="progress-canon">0 of 130 canon</span>
       </div>
-      <div class="progress-track"><div id="progress-all-bar" class="progress-bar" role="progressbar" aria-label="Episodes watched" aria-valuemin="0" aria-valuemax="220" aria-valuenow="0"></div></div>
+      <div class="progress-track"><div id="progress-canon-bar" class="progress-bar" role="progressbar" aria-label="Canon episodes watched" aria-valuemin="0" aria-valuemax="130" aria-valuenow="0"></div></div>
+      <p id="progress-all-text" class="progress-sub">0 of 220 total</p>
     </section>
 
     <!-- Up next: one card at a time -->
@@ -104,6 +104,8 @@
     <div id="episode-list" class="arc-list" aria-label="Episodes by arc"></div>
     <p id="empty-state" class="empty-state" hidden>No episodes match.</p>
   </main>
+
+  <footer class="app-version">Version 0.1</footer>
 
   <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 

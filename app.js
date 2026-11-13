@@ -445,10 +445,11 @@
     var total = watched.size;
     var canon = canonEpisodes.filter(function (e) { return watched.has(e.number); }).length;
     var pct = Math.round((total / TOTAL) * 100);
-    $("progress-all-text").textContent = total + " of " + TOTAL;
-    $("progress-canon-text").textContent = canon + " of " + canonEpisodes.length + " canon" +
+    // Canon is the headline (and the bar); all episodes and skips are the smaller line
+    $("progress-canon-text").textContent = canon + " of " + canonEpisodes.length;
+    $("progress-all-text").textContent = total + " of " + TOTAL + " total" +
       (skipped.size ? " · " + skipped.size + " skipped" : "");
-    setBar("progress-all-bar", total, TOTAL);
+    setBar("progress-canon-bar", canon, canonEpisodes.length);
     updateArcProgress();
     renderDeck();
     if (rows.length === TOTAL && arcs[0].el) applyFilters(); // the current arc may have changed

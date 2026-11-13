@@ -169,7 +169,11 @@ button:disabled { opacity: 0.4; cursor: default; }
   padding: 12px calc(16px + var(--safe-right)) calc(32px + var(--safe-bottom)) calc(16px + var(--safe-left));
 }
 .container { transition: opacity 0.2s ease; }
-.js-loading .container { visibility: hidden; opacity: 0; }
+.js-loading .container, .js-loading .app-version { visibility: hidden; opacity: 0; }
+.app-version {
+  max-width: 680px; margin: 0 auto; text-align: center;
+  padding: 0 16px calc(28px + var(--safe-bottom)); color: var(--secondary); font-size: 13px;
+}
 
 .card { position: relative; background: var(--surface); border-radius: var(--radius); margin: 0 0 16px; overflow: hidden; }
 
@@ -259,7 +263,8 @@ label.row { cursor: pointer; }
 .progress { margin: 4px 2px 14px; }
 .progress-head { display: flex; align-items: baseline; gap: 8px; }
 .progress-title { margin: 0; font-family: var(--font-display); font-size: 20px; font-weight: 700; letter-spacing: 0.01em; }
-.progress-canon { margin-left: auto; color: var(--secondary); font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.progress-head .sync-chip { margin-left: auto; }
+.progress-sub { margin: 6px 0 0; color: var(--secondary); font-size: 13px; font-variant-numeric: tabular-nums; }
 .progress-track { height: 6px; margin: 8px 0 0; border-radius: 3px; background: var(--fill); overflow: hidden; }
 .progress-bar { height: 100%; width: 0; border-radius: 3px; background: var(--accent); transition: width 0.5s cubic-bezier(.2, .8, .2, 1); }
 

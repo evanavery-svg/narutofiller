@@ -131,7 +131,7 @@ async function waitFor(fn, timeout = 8000) {
     const live = [1, 3, 4, 10];
     check("live: A tick + B untick reach both", same(await waitFor(async () => { const a = await watchedOf(A.page), b = await watchedOf(B.page); return same(a, live) && same(b, live) && a; }), live),
       `A=${await watchedOf(A.page)} B=${await watchedOf(B.page)}`);
-    check("live: progress text updated on A", (await A.page.textContent("#progress-all-text")) === "4 of 220");
+    check("live: progress text updated on A", (await A.page.textContent("#progress-all-text")) === "4 of 220 total");
 
     // Marking several at once (and Undo) syncs too
     check("chip: A shows 'Shared' on the main screen", (await A.page.textContent("#sync-chip")) === "Shared" && await A.page.isVisible("#sync-chip"));

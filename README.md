@@ -34,7 +34,7 @@ To keep things simple, the site sorts episodes into just two categories:
 - **Search.** One box that matches the episode number (`135`, `#135`, `ep 135`) or any part of the title. It ignores case and updates as you type. It works together with the filters.
 - **Watch tracker.**
   - A round checkbox on each episode, saved in `localStorage`. Tapping anywhere on the row (the number or title too) ticks it.
-  - A progress bar showing "40 of 220 watched", with the canon count (out of 130) and how many you skipped.
+  - Progress headline and bar for **canon** episodes ("29 of 130 canon watched"), with the all-episodes count ("30 of 220 total") and how many you skipped underneath.
   - The **Skip filler when continuing** switch (in the **⋯** menu, on by default) controls whether filler episodes appear in the up-next card at all.
   - If the All / Canon / Filler control or the search hides an episode you jump to, they change so you can see it.
   - **Mark Several Episodes** (in the **⋯** menu): pick a range (for example 1 to 80) and mark it all as watched or unwatched at once, optionally skipping filler. A message with **Undo** confirms it.
@@ -44,6 +44,7 @@ To keep things simple, the site sorts episodes into just two categories:
 - **Skip-filler guide.** A separate page (in the **⋯** menu) that lists the episodes to watch, collapsed into ranges, and the episodes to skip, with a map showing which to watch. Watch **1–25, 27–96, 98–100, 107–135, 141–142, 220** (130 episodes) and skip the 90 filler episodes, which saves about **34 h 30 min** at about 23 minutes per episode.
 - **PWA.** You can install it on a phone or desktop. Every file is saved on the first visit, so the whole app then works offline.
 - **Get the app.** **Get the App** in the **⋯** menu shows step-by-step install instructions for the device you're on (iPhone/iPad, Android or desktop). They also pop up by themselves when someone opens a Watch together invite link on a phone.
+- **Version number.** The bottom of the page shows the version (currently **0.1**). It's plain text in `index.html`.
 - **Always up to date.** Whenever there's a connection, every open of the site or app loads the newest version, and the app checks again each time you switch back to it. There's no "update available" step. Offline, it uses the last saved copy.
 
 ## Files
@@ -329,7 +330,7 @@ It checks:
 - **Leave:** stopping sharing, and staying left after a reload.
 - **Security rules:** listing rooms, malformed codes, unexpected fields, deletes, and other collections are all refused.
 
-The last runs passed all 144 checks in `e2e-test.js` and all 40 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 99** in light mode, and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
+The last runs passed all 146 checks in `e2e-test.js` and all 40 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 99** in light mode, and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
 
 ## Legal
 

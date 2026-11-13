@@ -184,12 +184,14 @@ const collapse = (nums) => {
     await page.click("#ep-26 .badge");
     check("row: tapping the Filler tag ticks it", await page.isChecked("#ep-26 input"));
     await page.click("#ep-26 .ep-title");
-    check("row: progress follows row taps", (await page.textContent("#progress-all-text")) === "0 of 220");
+    check("row: progress follows row taps", (await page.textContent("#progress-all-text")) === "0 of 220 total");
 
     // Watch tracker
     for (const n of [1, 2, 3, 26]) await page.check(`#ep-${n} input`);
-    check("tracker: progress 4 of 220", (await page.textContent("#progress-all-text")) === "4 of 220");
-    check("tracker: canon progress 3 of 130", (await page.textContent("#progress-canon-text")) === "3 of 130 canon");
+    check("tracker: headline is canon, 3 of 130", (await page.textContent("#tracker-title")) === "3 of 130 canon watched");
+    check("tracker: all episodes 4 of 220 underneath", (await page.textContent("#progress-all-text")) === "4 of 220 total");
+    check("version: 0.1 shown at the bottom", (await page.textContent(".app-version")) === "Version 0.1");
+    check("tracker: bar tracks canon", (await page.getAttribute("#progress-canon-bar", "aria-valuenow")) === "3" && (await page.getAttribute("#progress-canon-bar", "aria-valuemax")) === "130");
     // Up-next card (skips filler by default)
     check("deck: shows episode 4 next", (await page.textContent("#deck-num")) === "Episode 4");
     check("deck: shows its arc and title", (await page.textContent("#deck-arc")) === "Land of Waves" && (await page.textContent("#deck-title")) === E[3].title);
@@ -206,13 +208,13 @@ const collapse = (nums) => {
     await waitFor(async () => (await page.textContent("#deck-num")) === "Episode 27", 3000);
     check("deck: Skip moves to the next card", (await page.textContent("#deck-num")) === "Episode 27");
     check("deck: skipped episode is marked in the list, not watched", (await page.locator("#ep-26.is-skipped").count()) === 1 && !(await page.isChecked("#ep-26 input")));
-    check("deck: skipped count shown", (await page.textContent("#progress-canon-text")).includes("1 skipped"));
+    check("deck: skipped count shown", (await page.textContent("#progress-all-text")).includes("1 skipped"));
     await page.click(".toast-action");
     check("deck: Undo brings the skipped card back", (await page.textContent("#deck-num")) === "Episode 26" && (await page.locator("#ep-26.is-skipped").count()) === 0);
     // Watched -> ticked in the list, progress moves
     await page.click("#deck-watch");
     await waitFor(async () => (await page.textContent("#deck-num")) === "Episode 27", 3000);
-    check("deck: Watched ticks the episode", await page.isChecked("#ep-26 input") && (await page.textContent("#progress-all-text")) === "26 of 220");
+    check("deck: Watched ticks the episode", await page.isChecked("#ep-26 input") && (await page.textContent("#progress-all-text")) === "26 of 220 total");
     await page.click(".toast-action");
     check("deck: Undo unticks it", !(await page.isChecked("#ep-26 input")));
     // skip then tap the row: becomes watched, no longer skipped
@@ -262,7 +264,7 @@ const collapse = (nums) => {
     await page.reload();
     const checked = await page.$$eval(".episode input:checked", (els) => els.map((e) => Number(e.dataset.number)));
     check("persistence: watched survive reload", JSON.stringify(checked) === JSON.stringify(Array.from({ length: 25 }, (_, i) => i + 1)), checked.length);
-    check("persistence: progress after reload", (await page.textContent("#progress-all-text")) === "25 of 220");
+    check("persistence: progress after reload", (await page.textContent("#progress-all-text")) === "25 of 220 total");
 
     // reset confirm
     await openMenu();
@@ -307,7 +309,7 @@ const collapse = (nums) => {
     let w = await page.$$eval(".episode input:checked", (els) => els.map((e) => Number(e.dataset.number)));
     check("bulk: marked 1–30 except filler 26", w.length === 29 && !w.includes(26) && w.includes(30), w.join(","));
     check("bulk: sheet closed", !(await page.evaluate(() => document.getElementById("bulk-sheet").open)));
-    check("bulk: progress updated", (await page.textContent("#progress-all-text")) === "29 of 220");
+    check("bulk: progress updated", (await page.textContent("#progress-all-text")) === "29 of 220 total");
     check("bulk: offers Undo", (await page.textContent("#toast")).includes("Marked 29 episodes") && await page.isVisible(".toast-action"));
     await page.click(".toast-action");
     check("bulk: Undo restores", (await page.locator(".episode input:checked").count()) === 0);
