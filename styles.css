@@ -213,10 +213,14 @@ button:disabled { opacity: 0.4; cursor: default; }
 .ready .progress { animation-delay: 60ms; }
 .ready .deck { animation-delay: 120ms; }
 .ready .list-controls { animation-delay: 180ms; }
-.arc { animation: rise 0.4s cubic-bezier(.2, .8, .2, 1) backwards; }
-.arc:nth-child(1) { animation-delay: 220ms; } .arc:nth-child(2) { animation-delay: 260ms; }
-.arc:nth-child(3) { animation-delay: 300ms; } .arc:nth-child(4) { animation-delay: 340ms; }
-.arc:nth-child(5) { animation-delay: 380ms; } .arc:nth-child(6) { animation-delay: 420ms; }
+/* only while the page first appears (a filter or search showing an arc again doesn't replay it) */
+.entering .arc { animation: rise 0.4s cubic-bezier(.2, .8, .2, 1) backwards; }
+.entering .arc:nth-child(1) { animation-delay: 220ms; } .entering .arc:nth-child(2) { animation-delay: 260ms; }
+.entering .arc:nth-child(3) { animation-delay: 300ms; } .entering .arc:nth-child(4) { animation-delay: 340ms; }
+.entering .arc:nth-child(5) { animation-delay: 380ms; } .entering .arc:nth-child(6) { animation-delay: 420ms; }
+/* the browser skips laying out and painting arc sections that are off-screen */
+.arc { content-visibility: auto; contain-intrinsic-size: auto 60px; }
+.jumping .arc { content-visibility: visible; } /* while jumping to an episode: real heights */
 
 .card { position: relative; background: var(--surface); border-radius: var(--radius); margin: 0 0 16px; overflow: hidden; }
 
@@ -391,6 +395,7 @@ label.row { cursor: pointer; }
   transition: transform 0.3s cubic-bezier(.4, 0, .6, 1), opacity 0.3s;
 }
 /* with a mouse, the card tilts toward the pointer and catches the light */
+.deck-card { will-change: transform; }
 .deck-card.tilting { transform: rotateX(var(--rx, 0deg)) rotateY(var(--ry, 0deg)); transition: transform 0.08s linear; }
 .deck-card::after {
   content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 0.3s;
@@ -509,11 +514,14 @@ label.row { cursor: pointer; }
 .ep-row:active { background: var(--fill); }
 .episode + .episode::before { content: ""; position: absolute; top: 0; left: 56px; right: 0; border-top: 0.5px solid var(--separator); }
 @media (hover: hover) { .episode:hover { background: color-mix(in srgb, var(--fill) 50%, transparent); } }
-.episode { animation: row-in 0.3s ease-out backwards; }
-.episode:nth-child(2) { animation-delay: 20ms; } .episode:nth-child(3) { animation-delay: 40ms; }
-.episode:nth-child(4) { animation-delay: 60ms; } .episode:nth-child(5) { animation-delay: 80ms; }
-.episode:nth-child(6) { animation-delay: 100ms; } .episode:nth-child(7) { animation-delay: 120ms; }
-.episode:nth-child(8) { animation-delay: 140ms; } .episode:nth-child(n+9) { animation-delay: 160ms; }
+/* rows slide in only while you unfold an arc */
+.unfolding .episode { animation: row-in 0.3s ease-out backwards; }
+.unfolding .episode:nth-child(2) { animation-delay: 20ms; } .unfolding .episode:nth-child(3) { animation-delay: 40ms; }
+.unfolding .episode:nth-child(4) { animation-delay: 60ms; } .unfolding .episode:nth-child(5) { animation-delay: 80ms; }
+.unfolding .episode:nth-child(6) { animation-delay: 100ms; } .unfolding .episode:nth-child(7) { animation-delay: 120ms; }
+.unfolding .episode:nth-child(n+8) { animation-delay: 140ms; }
+/* no separator above the first row that's showing (rows before it may be filtered out) */
+.episode.first-vis::before { display: none; }
 .episode.is-highlight { animation: highlight 1.8s ease; }
 @keyframes highlight { 0%, 35% { background: var(--tint); } 100% { background: transparent; } }
 
@@ -706,8 +714,9 @@ label.row { cursor: pointer; }
 .ep-map { display: grid; grid-template-columns: repeat(22, minmax(0, 1fr)); gap: 3px; }
 .cell { aspect-ratio: 1; border-radius: 3px; background: var(--fill-strong); cursor: pointer; }
 .cell.is-on { background: var(--green); }
-.sheet[open] .cell { animation: cell-in 0.4s cubic-bezier(.3, 1.4, .5, 1) backwards; animation-delay: calc(0.15s + var(--d, 0) * 4ms); }
-@keyframes cell-in { from { transform: scale(0); opacity: 0; } }
+/* the map sweeps in as one piece (cheap), rather than 220 separate animations */
+.sheet[open] .ep-map { animation: map-wipe 0.7s 0.15s cubic-bezier(.3, .7, .3, 1) backwards; }
+@keyframes map-wipe { from { clip-path: inset(0 100% 0 0); opacity: 0.4; } to { clip-path: inset(0 0 0 0); opacity: 1; } }
 
 .range-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .range-list li {

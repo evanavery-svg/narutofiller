@@ -174,24 +174,24 @@ const collapse = (nums) => {
     check("filter: filler only", v.length === 90 && v.every((n) => E[n - 1].type === "filler"), v.length);
 
     // Search combined with filter (filler only)
-    await page.fill("#search", "KAKASHI");
+    await page.fill("#search", "KAKASHI"); await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r()))); // search redraws on the next frame
     v = await visibleNums();
     const expectKakashiFiller = E.filter((e) => e.type === "filler" && e.title.toLowerCase().includes("kakashi")).map((e) => e.number);
     check("search+filter: 'KAKASHI' within filler (case-insensitive)", JSON.stringify(v) === JSON.stringify(expectKakashiFiller), v.join(","));
     await show("all");
-    await page.fill("#search", "kakashi");
+    await page.fill("#search", "kakashi"); await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r()))); // search redraws on the next frame
     v = await visibleNums();
     const expectKakashi = E.filter((e) => e.title.toLowerCase().includes("kakashi")).map((e) => e.number);
     check("search: 'kakashi' all types", JSON.stringify(v) === JSON.stringify(expectKakashi), v.length);
-    await page.fill("#search", "135");
+    await page.fill("#search", "135"); await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r()))); // search redraws on the next frame
     check("search: number '135'", JSON.stringify(await visibleNums()) === "[135]");
-    await page.fill("#search", "#7");
+    await page.fill("#search", "#7"); await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r()))); // search redraws on the next frame
     check("search: '#7'", JSON.stringify(await visibleNums()) === "[7]");
-    await page.fill("#search", "");
+    await page.fill("#search", ""); await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r()))); // search redraws on the next frame
     check("search cleared: all 220 shown", (await visibleNums()).length === 220);
-    await page.fill("#search", "zzzz");
+    await page.fill("#search", "zzzz"); await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r()))); // search redraws on the next frame
     check("search: no match shows empty state", (await visibleNums()).length === 0 && (await page.locator("#empty-state").isVisible()));
-    await page.fill("#search", "");
+    await page.fill("#search", ""); await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r()))); // search redraws on the next frame
 
     await expandAllArcs(); // so every episode row can be tapped
     // Tapping the episode's title (or number) ticks it too
@@ -258,16 +258,16 @@ const collapse = (nums) => {
     check("arcs: your choice is remembered", await page.isVisible("#ep-1"));
     await page.click("#arc-0 .arc-head");
     check("arcs: tapping again folds it", (await waitFor(async () => !(await page.isVisible("#ep-1")), 3000)) === true);
-    await page.fill("#search", "special report");
+    await page.fill("#search", "special report"); await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r()))); // search redraws on the next frame
     check("arcs: a search opens matching sections", await page.isVisible("#ep-26") && (await page.locator(".arc:not([hidden])").count()) === 1);
-    await page.fill("#search", "");
+    await page.fill("#search", ""); await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r()))); // search redraws on the next frame
     await show("filler");
     check("arcs: Filler hides canon-only arcs", !(await page.isVisible("#arc-0")) && await page.isVisible("#arc-1"));
     await show("all");
     await expandAllArcs();
     // jump while filter hides target
     await show("filler");
-    await page.fill("#search", "zzz");
+    await page.fill("#search", "zzz"); await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r()))); // search redraws on the next frame
     await page.click("#deck-find");
     await page.waitForTimeout(700);
     check("deck: tapping the card reveals ep 27 in the list", await page.locator("#ep-27").isVisible());

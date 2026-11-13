@@ -107,6 +107,7 @@ tools/                optional developer scripts (not needed to run the site)
   validate-data.js    checks there are exactly 220 episodes numbered 1–220 and prints counts per type
   make-icons.js       draws the leaf logo, regenerates the icons and the logo in the page header (needs Playwright)
   e2e-test.js         end-to-end browser test (needs Playwright)
+  monkey-test.js      random-action test: hundreds of random taps, checking the screen matches the saved data
   sync-test.js        two-device shared-list test against the Firestore emulator
 ```
 
@@ -399,6 +400,15 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
   - on desktop, an invite opens Watch Together directly
 
 - **Sharing switched off:** the card explains that sharing isn't set up (or, on `file://`, that it needs the hosted site).
+
+`node tools/monkey-test.js [seed] [steps]` does hundreds of random actions against a local server (`python3 -m http.server 8000`) and checks after each one that the screen matches the saved data. Fourteen runs of 200–250 steps each found no mismatches and no JavaScript errors.
+
+**Speed.** Measured with the CPU slowed 4× (roughly a mid-range phone), every tap responds in under about 100 ms. Typing in search went from 360 ms to 80 ms, and opening the Skip-Filler Guide from 232 ms to 64 ms. What makes the difference:
+- Rows animate only when an arc unfolds, not whenever a filter or search shows them again.
+- The guide's map sweeps in as one piece.
+- Off-screen arcs aren't drawn until you scroll to them (`content-visibility`); jumping to an episode draws everything briefly so the scroll lands on the right spot.
+- Search redraws at most once per screen frame.
+- The list is re-filtered only when something it depends on changes.
 
 `node tools/sync-test.js` tests sharing with two simulated devices against the local Firestore emulator. To run it:
 

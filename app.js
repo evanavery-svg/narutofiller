@@ -448,18 +448,22 @@
       syncRow(n - 1);
       if (input.checked) pop(input.nextElementSibling);
       updateProgress();
-      if (prefs.hideWatched) applyFilters();
+      if (prefs.hideWatched) setTimeout(applyFilters, 450); // let the tick animation play first
     });
   }
 
   // Which arc sections are expanded. The arc you're up to opens by itself; finished ones fold
   // away. Once you open or close a section yourself, that choice is remembered.
   function arcKey(a) { return a.name + "@" + a.start; }
-  function isArcOpen(a) {
+  /** The arc you're up to (the one with your next episode). */
+  function currentArc() {
+    var next = nextEpisode();
+    return next ? arcOf[next.number - 1] : null;
+  }
+  function isArcOpen(a, cur) {
     var key = arcKey(a);
     if (Object.prototype.hasOwnProperty.call(prefs.arcOpen, key)) return prefs.arcOpen[key];
-    var next = nextEpisode();
-    return !!next && arcOf[next.number - 1] === a;
+    return a === (cur === undefined ? currentArc() : cur);
   }
   function setArcOpen(a, open, instant) {
     prefs.arcOpen[arcKey(a)] = open;
@@ -478,10 +482,12 @@
     }
     var wasHidden = a.list.hidden;
     applyFilters();
-    if (open && animate && wasHidden && !a.list.hidden) { // unfold: grow to full height
+    if (open && animate && wasHidden && !a.list.hidden) { // unfold: grow to full height, rows slide in
       a.list.style.overflow = "hidden";
+      a.list.classList.add("unfolding");
       a.list.animate([{ height: "0px", opacity: 0 }, { height: a.list.scrollHeight + "px", opacity: 1 }],
         { duration: 320, easing: "cubic-bezier(.2, .9, .3, 1)" }).onfinish = function () { a.list.style.overflow = ""; };
+      setTimeout(function () { a.list.classList.remove("unfolding"); }, 600);
     }
   }
 
@@ -502,7 +508,6 @@
       cell.className = "cell";
       cell.dataset.type = kindOf(ep);
       cell.dataset.n = ep.number;
-      cell.style.setProperty("--d", ep.number);
       cell.title = "Ep " + ep.number + " · " + ep.title + " (" + TYPE_BY_ID[kindOf(ep)].long + ")";
       frag.appendChild(cell);
       cells.push(cell);
@@ -543,22 +548,37 @@
     return matchesQuery(i);
   }
 
+  var lastCurrentArc;
+  function setHidden(el, hidden) { if (el.hidden !== hidden) el.hidden = hidden; }
   function applyFilters() {
     var shown = 0;
+    var cur = currentArc();
     for (var i = 0; i < TOTAL; i++) {
       var vis = isVisible(i);
-      rows[i].li.hidden = !vis;
+      setHidden(rows[i].li, !vis);
       if (vis) shown++;
     }
     arcs.forEach(function (a) {
-      var visible = a.numbers.some(function (n) { return !rows[n - 1].li.hidden; });
-      var open = visible && (isArcOpen(a) || !!query); // a search opens every section with a match
-      a.el.hidden = !visible;
-      a.list.hidden = !open;
-      a.el.classList.toggle("is-open", open);
-      a.head.setAttribute("aria-expanded", String(open));
+      var first = null;
+      a.numbers.forEach(function (n) {
+        var li = rows[n - 1].li;
+        if (!li.hidden && !first) first = li;
+        if (li.classList.contains("first-vis") !== (li === first)) li.classList.toggle("first-vis", li === first);
+      });
+      var visible = !!first;
+      var open = visible && (isArcOpen(a, cur) || !!query); // a search opens every section with a match
+      setHidden(a.el, !visible);
+      setHidden(a.list, !open);
+      if (a.el.classList.contains("is-open") !== open) a.el.classList.toggle("is-open", open);
+      if (a.head.getAttribute("aria-expanded") !== String(open)) a.head.setAttribute("aria-expanded", String(open));
     });
-    $("empty-state").hidden = shown !== 0;
+    setHidden($("empty-state"), shown !== 0);
+  }
+  /** Typing in the search box: redraw at most once per frame. */
+  var filterFrame = 0;
+  function scheduleFilters() {
+    if (filterFrame) return;
+    filterFrame = requestAnimationFrame(function () { filterFrame = 0; applyFilters(); });
   }
 
   /** Finished: everything watched or skipped (filler doesn't count while skipping filler). */
@@ -639,7 +659,10 @@
     $("pace-text").textContent = parts.join(" · ");
     updateArcProgress();
     renderDeck();
-    if (rows.length === TOTAL && arcs[0].el) applyFilters(); // the current arc may have changed
+    if (rows.length === TOTAL && arcs[0].el) { // the arc you're up to may have changed
+      var cur = currentArc();
+      if (cur !== lastCurrentArc) { lastCurrentArc = cur; applyFilters(); }
+    }
 
     var n = watched.size + skipped.size;
     $("reset-question").textContent = n
@@ -690,6 +713,7 @@
     var ep = nextEpisode();
     if (!ep || deckBusy) return;
     var n = ep.number, before = stateOf(n);
+    var lastBefore = profile.last ? { n: profile.last.n, at: profile.last.at } : null;
     var card = $("deck-card");
     deckBusy = true;
     resetTilt();
@@ -716,6 +740,11 @@
         setState(n, before);
         recordChanges([n]);
         syncRow(n - 1);
+        if (state === "watched") { // you didn't watch it after all: put "last watched" back
+          if (lastBefore) profile.last = lastBefore; else delete profile.last;
+          saveProfile();
+        }
+        if (ratePrompt.n === n) showRatePrompt(0);
         updateProgress();
         applyFilters();
       });
@@ -815,6 +844,13 @@
     }
     var li = rows[i].li;
     var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // Off-screen arcs normally aren't drawn (faster), so their heights are estimates. Draw them all
+    // for the jump, so the scroll lands on the real position.
+    var html = document.documentElement;
+    html.classList.add("jumping");
+    void li.offsetTop; // lay everything out now
+    clearTimeout(jumpTo.timer);
+    jumpTo.timer = setTimeout(function () { html.classList.remove("jumping"); }, 1200);
     li.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
     li.classList.remove("is-highlight");
     void li.offsetWidth; // restart animation
@@ -966,13 +1002,27 @@
     };
     var file = "naruto-filler-backup-" + new Date().toISOString().slice(0, 10) + ".json";
     var blob = new Blob([JSON.stringify(data, null, 1)], { type: "application/json" });
-    var a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = file;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-    toast("Backup saved: " + file);
+    // Phones: the share sheet ("Save to Files") is more reliable than a download, especially
+    // in an installed iPhone app
+    if (platform.mobile && window.File && navigator.canShare) {
+      var shared = new File([blob], file, { type: "application/json" });
+      if (navigator.canShare({ files: [shared] })) {
+        navigator.share({ files: [shared], title: "Naruto Filler Guide backup" })
+          .then(function () { toast("Backup saved"); })
+          .catch(function (err) { if (!err || err.name !== "AbortError") download(); });
+        return;
+      }
+    }
+    download();
+    function download() {
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = file;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      toast("Backup saved: " + file);
+    }
   }
   var pendingRestore = null;
   function readBackup(file) {
@@ -1897,7 +1947,7 @@
     var search = $("search");
     search.addEventListener("input", function () {
       query = normalize(search.value.trim());
-      applyFilters();
+      scheduleFilters();
     });
     search.addEventListener("keydown", function (e) {
       if (e.key === "Escape" && search.value) { search.value = ""; query = ""; applyFilters(); }
@@ -1922,6 +1972,15 @@
 
     // Keep tabs in sync if progress changes in another tab/window
     window.addEventListener("storage", function (e) {
+      if (e.key === STORAGE.ratings || e.key === STORAGE.favorites) { // rated in another tab
+        var r = load(STORAGE.ratings, {}) || {};
+        ratings = {};
+        Object.keys(r).forEach(function (k) { var n = Number(k); if (n >= 1 && n <= TOTAL && r[k] >= 1 && r[k] <= 5) ratings[n] = r[k]; });
+        favorites = loadNumbers(STORAGE.favorites);
+        for (var j = 0; j < TOTAL; j++) syncRow(j);
+        updateArcProgress();
+        return;
+      }
       if (e.key !== STORAGE.watched && e.key !== STORAGE.skipped) return;
       watched = loadNumbers(STORAGE.watched);
       skipped = loadNumbers(STORAGE.skipped);
@@ -1947,7 +2006,8 @@
     if (location.protocol === "file:") $("file-note").hidden = false;
     document.documentElement.classList.remove("js-loading"); // reveal the built page
     whenSplashDone(function () {
-      document.documentElement.classList.add("ready");       // entrance animations
+      document.documentElement.classList.add("ready", "entering"); // entrance animations
+      setTimeout(function () { document.documentElement.classList.remove("entering"); }, 1200);
       initLogo();
     });
     registerServiceWorker();
