@@ -48,6 +48,16 @@ To keep things simple, the site sorts episodes into just two categories:
   - Rated and favorite episodes show their stars and a heart in the list, and each arc shows your average rating.
   - **⋯ → Ratings & Favorites** lists your top-rated episodes (best first) and your favorites. Tap one to open it.
 - **Episode details.** The **ⓘ** panel shows the episode's arc, which manga chapters it adapts (or "anime-only" for filler), when it was marked watched, and, on a shared list, the other people's ratings and favorites ("Sara ★★★★★ ♥"). There are no plot summaries: the only sources are the wiki's spoiler-heavy synopses, which aren't ours to copy.
+- **Notes and reactions.** In an episode's **ⓘ** details, react with one of 🔥 😭 😂 😮 😡 💤 (hype, sad, funny, shocked, angry, boring) and leave a short note (up to 280 characters).
+  - Reactions show next to the episode in the list, and a small speech bubble means someone left a note.
+  - On a shared list, everyone sees everyone else's reactions and notes in the details panel, and the activity line adds the other person's reaction ("Sara watched Ep 45 😭 · 2h ago").
+  - With the spoiler shield on, other people's notes on episodes you haven't watched are blurred until you tap **Show title**.
+  - **⋯ → Ratings & Favorites** lists every episode with a note or reaction.
+- **Watch calendar and streaks** (**⋯ → Watch Calendar**, or tap the 🔥 chip next to your progress).
+  - A heatmap of the last 18 weeks: the more episodes you watched that day, the deeper the orange. Tap a day to see what you watched (and, on a shared list, what the others watched).
+  - **Day streak** counts the days in a row you watched something. It lasts until you miss a whole day. The 🔥 chip turns gray when you haven't watched anything yet today, so the streak is about to end.
+  - Also shows your longest streak and how many days you've watched. On a shared list, everyone's streaks.
+  - A day counts only for episodes marked one at a time. **Mark Several** doesn't count, since those are usually episodes you watched before using the app.
 - **Time left and finish estimate.** Under your progress: "42h 33m of canon left · about 3 a day · done with canon around Dec 20".
   - Time left counts the episodes still ahead of you, at about 23 minutes each.
   - The pace uses the episodes you've marked one at a time in the last two weeks; **Mark Several** and other bulk changes don't count.
@@ -60,8 +70,9 @@ To keep things simple, the site sorts episodes into just two categories:
 - **Naruto Wrapped** (**⋯** menu). A summary card you can share:
   - episodes, hours and days watched
   - your top-rated episodes and favorite arc (your best-rated, or the one you watched most)
+  - your longest streak, biggest binge (most episodes in one day) and go-to reaction
   - on a shared list, how many ratings you agree on with each person, and your biggest debate
-- **Backup** (**⋯ → Save a Backup / Restore from Backup**). Saves your progress, skips, ratings, favorites and name to a `.json` file, and restores it later. Restoring asks first, and on a shared list your restored progress syncs.
+- **Backup** (**⋯ → Save a Backup / Restore from Backup**). Saves your progress (with the dates, for the calendar), skips, ratings, favorites, notes and name to a `.json` file, and restores it later. Restoring asks first, and on a shared list your restored progress syncs.
 - **Partner activity.** While you share a list, a small line under your progress shows what the other person watched last ("Sara watched Ep 45 · 2h ago"). Tap it to open that episode.
 - **Who watched it.** On a shared list, everyone keeps their own progress:
   - Ticking marks an episode for you only, and **Continue** (the up-next card) follows your progress.
@@ -242,7 +253,7 @@ From then on:
 ### Privacy and limits
 
 - **The code works like a password.** Anyone with your code or invite link can see and change that list. Nobody can browse the database to find codes: the rules block listing, and codes are random 16-character strings with about 79 bits of randomness. To revoke access, both of you **Leave**, create a new list, and optionally delete the old document under `rooms` in the Firebase console.
-- **Only watch data and first names are stored.** Each list is one document. For each person it holds the first name they entered, their watched/skipped episodes with when each changed, their star ratings, their favorites and their latest episode. There are no emails or accounts.
+- **Only watch data and first names are stored.** Each list is one document. For each person it holds the first name they entered, their watched/skipped episodes with when each changed, their star ratings, favorites, reactions and notes, and their latest episode. There are no emails or accounts.
 - **Free plan limits.** At the time of writing, the Spark plan's free quota for a Standard database is 50,000 document reads, 20,000 writes and 20,000 deletes per day, plus 1 GiB of storage ([current limits](https://firebase.google.com/docs/firestore/quotas)). Two people ticking episodes use a tiny fraction of that. Because the project has no billing account, it can't charge you. If a limit were ever reached, sync requests would be refused until the quota resets (daily, around midnight Pacific time), and the app would keep working on each device.
 - **Phone clocks matter.** "Most recent change wins" uses each device's clock. If a phone's clock is badly wrong, its changes might win when they shouldn't. Normal automatic phone time is fine.
 - **Optional extra lock-down.** In the [Google Cloud console](https://console.cloud.google.com/apis/credentials) for the same project, you can restrict the browser API key to your site with an HTTP referrer restriction such as `https://<username>.github.io/*`.
@@ -377,9 +388,21 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
   - names of arcs you haven't started blur, and started ones don't
   - details blur the arc name too, and **Show title** reveals it
   - watching an episode reveals its arc's name, and unwatching blurs it again
+- **Notes and reactions:**
+  - six reactions and a note field in the details
+  - one reaction at a time, and tapping it again clears it
+  - the row shows the reaction and a note icon
+  - notes are saved, still there after a reload, and listed in **Ratings & Favorites** and Wrapped
+- **Watch calendar and streaks** (a made-up history):
+  - the 🔥 chip shows a 3-day streak and opens the calendar
+  - current, longest and days-watched counts, and 18 weeks of days
+  - today is shaded and selected, and tapping a day lists its episodes, leaving out **Mark Several**
+  - an empty day says so, and the calendar fits a phone screen
+  - nothing watched today keeps the streak but marks it at risk, and watching brings it back
+  - Wrapped shows the longest streak and biggest binge
 - **Naruto Wrapped:** the stats, top episode and favorite arc.
 - **Backup:**
-  - the saved file contains progress, ratings and favorites
+  - the saved file contains progress, ratings, favorites and notes
   - after clearing, restoring asks first, shows a summary and brings everything back
   - other files are refused
 - **Arc complete:** finishing Land of Waves with a single tick celebrates and names the next arc, while **Mark Several** doesn't.
@@ -405,7 +428,7 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
 
 - **Sharing switched off:** the card explains that sharing isn't set up (or, on `file://`, that it needs the hosted site).
 
-`node tools/monkey-test.js [seed] [steps]` does hundreds of random actions against a local server (`python3 -m http.server 8000`) and checks after each one that the screen matches the saved data. Fourteen runs of 200–250 steps each found no mismatches and no JavaScript errors.
+`node tools/monkey-test.js [seed] [steps]` does hundreds of random actions against a local server (`python3 -m http.server 8000`) and checks after each one that the screen matches the saved data. It also leaves random reactions and notes and opens the calendar. Seventeen runs of 200–250 steps each found no mismatches and no JavaScript errors.
 
 **Speed.** Measured with the CPU slowed 4× (roughly a mid-range phone), every tap responds in under about 100 ms. Typing in search went from 360 ms to 80 ms, and opening the Skip-Filler Guide from 232 ms to 64 ms. What makes the difference:
 - Rows animate only when an arc unfolds, not whenever a filter or search shows them again.
@@ -441,13 +464,14 @@ It checks:
   - each device's name, and what each person watched last, reaches the other device
   - ratings and favorites stay per person, and each sees the other's on the episode details
   - a name change reaches the other device
+  - reactions and notes reach the other device (in the list and the details), the spoiler shield blurs a note on an episode you haven't seen, and the calendar shows everyone's streaks
   - the rules refuse lists with more than 10 people
 - **Live sync:** ticks and unticks going both ways, skipping from the up-next card (and **Undo**) reaching the other device, marking several episodes and **Undo** reaching the other device, and reset clearing the other device.
 - **Offline:** changes made offline converging with the other device's changes after reconnecting, including a change made offline just before the app was closed.
 - **Leave:** stopping sharing, and staying left after a reload.
 - **Security rules:** listing rooms, malformed codes, unexpected fields, deletes, and other collections are all refused.
 
-The last runs passed all 221 checks in `e2e-test.js` and all 60 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 95** in light mode (performance was 97–99 before the startup animation, which covers the first two seconds), and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
+The last runs passed all 246 checks in `e2e-test.js` and all 66 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 95** in light mode (performance was 97–99 before the startup animation, which covers the first two seconds), and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
 
 ## Legal
 

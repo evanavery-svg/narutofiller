@@ -28,6 +28,7 @@
     ratings: "naruto-filler:ratings:v1", // { episodeNumber: 1–5 stars } (yours)
     favorites: "naruto-filler:favorites:v1", // [episodeNumber] (yours)
     profile: "naruto-filler:profile:v1", // { id, name, asked, last: { n, at } }
+    notes: "naruto-filler:notes:v1",     // { episodeNumber: { e: reaction emoji, x: note text } } (yours)
     room: "naruto-filler:room:v1"        // shared list code, if any
   };
 
@@ -125,6 +126,34 @@
     savePersonal();
     refreshPersonal(n);
   }
+  // ---------- Notes & reactions (yours; partners' arrive with the shared list) ----------
+  var REACTIONS = [["🔥", "Hype"], ["😭", "Sad"], ["😂", "Funny"], ["😮", "Shocked"], ["😡", "Angry"], ["💤", "Boring"]];
+  var REACTION_SET = REACTIONS.map(function (r) { return r[0]; });
+  var NOTE_MAX = 280;
+  /** Keeps only valid entries: a known reaction and/or some text. */
+  function cleanNotes(raw) {
+    var out = {};
+    if (!raw || typeof raw !== "object") return out;
+    Object.keys(raw).forEach(function (k) {
+      var n = Number(k), v = raw[k];
+      if (!(Number.isInteger(n) && n >= 1 && n <= TOTAL) || !v || typeof v !== "object") return;
+      var e = REACTION_SET.indexOf(v.e) !== -1 ? v.e : "";
+      var x = typeof v.x === "string" ? v.x.slice(0, NOTE_MAX) : "";
+      if (!x.trim()) x = "";
+      if (e || x) { out[n] = {}; if (e) out[n].e = e; if (x) out[n].x = x; }
+    });
+    return out;
+  }
+  var notes = cleanNotes(load(STORAGE.notes, {}));
+  function setNote(n, patch) {
+    var cur = cleanNotes((function () { var o = {}; o[n] = Object.assign({}, notes[n] || {}, patch); return o; })())[n];
+    if (cur) notes[n] = cur; else delete notes[n];
+    save(STORAGE.notes, notes);
+    pushMember();
+    if (rows.length === TOTAL) syncRow(n - 1);
+    if ($("top-sheet").open) renderTop();
+  }
+
   /** Remembers the last episode you yourself marked watched (shown to your partner). */
   function noteWatched(n) {
     profile.last = { n: n, at: Date.now() };
@@ -186,12 +215,13 @@
   }
 
   /** Records local changes and sends them to the shared list (if any). */
-  function recordChanges(numbers) {
+  function recordChanges(numbers, timeOf) {
     var t = stamp();
     var entries = {};
     numbers.forEach(function (n) {
-      changedAt[n] = t;
-      entries[n] = entryOf(n, t);
+      var when = (timeOf && timeOf(n)) || t;
+      changedAt[n] = when;
+      entries[n] = entryOf(n, when);
     });
     saveWatched();
     if (sync.controller) {
@@ -315,6 +345,7 @@
 
   var INFO_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.6v.4"/></svg>';
   var STAR_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.3l2.6 5.5 6 .7-4.4 4.1 1.1 6L12 16.7l-5.3 2.9 1.1-6L3.4 9.5l6-.7z"/></svg>';
+  var NOTE_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.6 3.8c-.5.4-1.4.1-1.4-.6z"/></svg>';
   var HEART_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.3s-7.6-4.6-9-9.3C2 7.6 4.3 4.7 7.4 4.7c1.9 0 3.5 1.1 4.6 2.6 1.1-1.5 2.7-2.6 4.6-2.6 3.1 0 5.4 2.9 4.4 6.3-1.4 4.7-9 9.3-9 9.3z"/></svg>';
   var CHEVRON_SVG = '<svg class="arc-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
 
@@ -524,11 +555,18 @@
     rows[i].input.checked = watched.has(n);
     rows[i].li.classList.toggle("is-watched", watched.has(n));
     rows[i].li.classList.toggle("is-skipped", skipped.has(n));
-    var meta = "";
-    if (ratings[n]) meta += '<span class="meta-stars">' + STAR_SVG + ratings[n] + "</span>";
-    if (favorites.has(n)) meta += '<span class="meta-fav" title="Favorite">' + HEART_SVG + "</span>";
-    rows[i].meta.innerHTML = meta; // fixed markup + numbers only
-    rows[i].meta.setAttribute("aria-label", (ratings[n] ? ratings[n] + " stars" : "") + (favorites.has(n) ? (ratings[n] ? ", " : "") + "favorite" : ""));
+    var meta = "", label = [];
+    var reacts = reactionsFor(n), noted = hasNoteText(n);
+    // reaction emoji come from the fixed REACTIONS list (cleanNotes drops anything else)
+    if (reacts.length) { meta += '<span class="meta-react">' + reacts.slice(0, 3).join("") + "</span>"; label.push("reactions " + reacts.join(" ")); }
+    if (noted) { meta += '<span class="meta-note" title="Has notes">' + NOTE_SVG + "</span>"; label.push("has notes"); }
+    if (ratings[n]) { meta += '<span class="meta-stars">' + STAR_SVG + ratings[n] + "</span>"; label.push(ratings[n] + " stars"); }
+    if (favorites.has(n)) { meta += '<span class="meta-fav" title="Favorite">' + HEART_SVG + "</span>"; label.push("favorite"); }
+    if (rows[i].metaHTML !== meta) { // fixed markup, numbers and the fixed emoji only
+      rows[i].metaHTML = meta;
+      rows[i].meta.innerHTML = meta;
+      rows[i].meta.setAttribute("aria-label", label.join(", "));
+    }
   }
 
   // ---------- Filtering + search ----------
@@ -658,6 +696,7 @@
     }
     $("pace-text").hidden = !parts.length;
     $("pace-text").textContent = parts.join(" · ");
+    updateStreak();
     updateArcProgress();
     renderDeck();
     if (rows.length === TOTAL && arcs[0].el) { // the arc you're up to may have changed
@@ -956,8 +995,13 @@
       var diff = both.slice().sort(function (a, b) { return Math.abs(m.r[b] - ratings[b]) - Math.abs(m.r[a] - ratings[a]); })[0];
       return { m: m, both: both.length, agree: agree, diff: diff && Math.abs(m.r[diff] - ratings[diff]) >= 2 ? diff : 0 };
     });
+    var log = myLog(), st = streaks(log), counts = {}, react = "";
+    Object.keys(notes).forEach(function (k) { var e = notes[k].e; if (e) counts[e] = (counts[e] || 0) + 1; });
+    Object.keys(counts).forEach(function (e) { if (!react || counts[e] > counts[react]) react = e; });
     return { count: list.length, hours: Math.round(list.length * MINUTES_PER_EPISODE / 60), days: days,
-      top: top, arc: bestArc, favs: favorites.size, skipped: skipped.size, people: people };
+      top: top, arc: bestArc, favs: favorites.size, skipped: skipped.size, people: people,
+      longest: st.longest, best: st.best ? { day: st.best, count: log[st.best].length } : null,
+      react: react ? { e: react, count: counts[react] } : null };
   }
   function renderWrapped() {
     var d = wrappedData();
@@ -981,6 +1025,9 @@
       line(i === 0 ? "Your top episodes" : "", "★" + ratings[n] + "  Ep " + n + " · " + EPISODES[n - 1].title);
     });
     if (d.arc) line("Favorite arc", d.arc.name);
+    if (d.longest >= 2) line("Longest streak", "🔥 " + d.longest + " days in a row");
+    if (d.best && d.best.count >= 2) line("Biggest binge", d.best.count + " episodes · " + formatDate(parseDay(d.best.day)));
+    if (d.react) line("Go-to reaction", d.react.e + " × " + d.react.count);
     if (d.favs) line("Favorites", String(d.favs));
     if (d.skipped) line("Episodes skipped", String(d.skipped));
     d.people.forEach(function (p) {
@@ -1000,11 +1047,184 @@
     else if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { toast("Copied to the clipboard"); });
   }
 
+  // ---------- Watch calendar & streaks ----------
+  var CAL_WEEKS = 18;
+  var cal = { selected: "" };
+  function pad2(x) { return (x < 10 ? "0" : "") + x; }
+  function dayKey(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
+  function parseDay(k) { var p = k.split("-").map(Number); return new Date(p[0], p[1] - 1, p[2]); }
+  function addDays(d, k) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + k); }
+  function startOfToday() { var d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate()); }
+  /** Episodes watched per day, { "2026-11-13": [45, 46] }, from [episode, time] pairs. Marks that
+   *  share one time with 2+ others came from Mark Several (or a restore), so they don't count. */
+  function dayLog(pairs) {
+    var byTime = {}, days = {};
+    pairs.forEach(function (p) { (byTime[p[1]] = byTime[p[1]] || []).push(p[0]); });
+    Object.keys(byTime).forEach(function (t) {
+      if (byTime[t].length >= 3) return;
+      var k = dayKey(new Date(Number(t)));
+      days[k] = (days[k] || []).concat(byTime[t]);
+    });
+    Object.keys(days).forEach(function (k) { days[k].sort(function (a, b) { return a - b; }); });
+    return days;
+  }
+  function myLog() {
+    var pairs = [];
+    watched.forEach(function (n) { if (changedAt[n]) pairs.push([n, changedAt[n]]); });
+    return dayLog(pairs);
+  }
+  function memberLog(m) {
+    var pairs = [];
+    Object.keys(m.p).forEach(function (k) { if (m.p[k].state === "watched") pairs.push([Number(k), m.p[k].t]); });
+    return dayLog(pairs);
+  }
+  /** current: days in a row up to today (or yesterday, so it lasts until a whole day is missed). */
+  function streaks(days) {
+    var keys = Object.keys(days).sort(), longest = 0, run = 0, prev = "", best = "";
+    keys.forEach(function (k) {
+      run = prev && dayKey(addDays(parseDay(prev), 1)) === k ? run + 1 : 1;
+      longest = Math.max(longest, run);
+      prev = k;
+      if (!best || days[k].length > days[best].length) best = k;
+    });
+    var today = startOfToday(), d = days[dayKey(today)] ? today : addDays(today, -1), current = 0;
+    while (days[dayKey(d)]) { current++; d = addDays(d, -1); }
+    return { current: current, longest: longest, count: keys.length, best: best, today: !!days[dayKey(today)] };
+  }
+  function dayName(k) {
+    var today = startOfToday();
+    if (k === dayKey(today)) return "Today";
+    if (k === dayKey(addDays(today, -1))) return "Yesterday";
+    var d = parseDay(k), opts = { weekday: "long", month: "short", day: "numeric" };
+    if (d.getFullYear() !== today.getFullYear()) opts.year = "numeric";
+    return d.toLocaleDateString(undefined, opts);
+  }
+  function plural(n, word) { return n + " " + word + (n === 1 ? "" : "s"); }
+
+  /** The 🔥 chip next to your progress and the count in the menu. */
+  var lastStreak = null;
+  function updateStreak() {
+    var st = streaks(myLog()), chip = $("streak-chip");
+    chip.hidden = !st.current;
+    $("streak-count").textContent = st.current;
+    chip.classList.toggle("at-risk", !!st.current && !st.today);
+    chip.setAttribute("aria-label", plural(st.current, "day") + " in a row" +
+      (st.current && !st.today ? ". Watch an episode today to keep it going" : "") + ". Open the watch calendar");
+    $("menu-streak").textContent = st.current ? "🔥 " + st.current : "";
+    if (lastStreak !== null && st.current > lastStreak) pop(chip);
+    lastStreak = st.current;
+  }
+
+  function calLevel(count) { return count >= 5 ? 4 : count >= 3 ? 3 : count; }
+  function renderCalendar() {
+    var log = myLog(), st = streaks(log);
+    $("cal-current").textContent = st.current;
+    $("cal-longest").textContent = st.longest;
+    $("cal-days").textContent = st.count;
+    $("cal-days-label").textContent = st.count === 1 ? "day watched" : "days watched";
+
+    var today = startOfToday(), todayKey = dayKey(today);
+    var start = addDays(today, -today.getDay() - (CAL_WEEKS - 1) * 7); // a Sunday
+    var grid = $("cal-grid"), months = $("cal-months");
+    grid.textContent = "";
+    months.textContent = "";
+    grid.style.setProperty("--weeks", CAL_WEEKS);
+    months.style.setProperty("--weeks", CAL_WEEKS);
+    if (!cal.selected) cal.selected = todayKey;
+    for (var w = 0; w < CAL_WEEKS; w++) {
+      var first = addDays(start, w * 7);
+      // a month's name goes above the first week that starts in it (and above the first
+      // column, if that month lasts long enough for the name to fit)
+      var label = w === 0 ? addDays(first, 14).getMonth() === first.getMonth() : addDays(first, -7).getMonth() !== first.getMonth();
+      if (label) {
+        var m = document.createElement("span");
+        m.textContent = first.toLocaleDateString(undefined, { month: "short" });
+        m.style.gridColumn = (w + 1) + " / span 3";
+        months.appendChild(m);
+      }
+      for (var i = 0; i < 7; i++) {
+        var d = addDays(first, i), k = dayKey(d);
+        var cell;
+        if (d > today) {
+          cell = document.createElement("span");
+          cell.className = "cal-cell future";
+        } else {
+          var eps = log[k] || [];
+          cell = document.createElement("button");
+          cell.type = "button";
+          cell.className = "cal-cell";
+          cell.dataset.day = k;
+          cell.dataset.level = calLevel(eps.length);
+          cell.setAttribute("aria-label", dayName(k) + ": " +
+            (eps.length ? plural(eps.length, "episode") : "nothing watched"));
+          if (k === todayKey) cell.classList.add("today");
+          if (k === cal.selected) { cell.classList.add("selected"); cell.setAttribute("aria-pressed", "true"); }
+          else cell.setAttribute("aria-pressed", "false");
+        }
+        grid.appendChild(cell);
+      }
+    }
+    renderCalDay(log);
+
+    // Everyone's streaks, while sharing
+    var people = sync.roomId ? partners() : [];
+    $("cal-people").hidden = !people.length;
+    var list = $("cal-people-list");
+    list.textContent = "";
+    if (people.length) [{ name: "You", st: st }].concat(people.map(function (m) { return { name: m.name, st: streaks(memberLog(m)) }; }))
+      .forEach(function (p) {
+        var row = document.createElement("div");
+        row.className = "row";
+        var l = document.createElement("span"); l.className = "row-label"; l.textContent = p.name;
+        var v = document.createElement("span"); v.className = "row-value";
+        v.textContent = (p.st.current ? "🔥 " + p.st.current : "No streak") + " · best " + p.st.longest;
+        row.appendChild(l); row.appendChild(v); list.appendChild(row);
+      });
+  }
+  function renderCalDay(log) {
+    var k = cal.selected, eps = log[k] || [];
+    $("cal-day-title").textContent = dayName(k);
+    var box = $("cal-day-list");
+    box.textContent = "";
+    eps.forEach(function (n) { box.appendChild(topItem(n, ratings[n] ? "★ " + ratings[n] : "")); });
+    if (sync.roomId) partners().forEach(function (m) {
+      var theirs = memberLog(m)[k];
+      if (!theirs) return;
+      var row = document.createElement("div");
+      row.className = "row";
+      var l = document.createElement("span"); l.className = "row-label"; l.textContent = m.name;
+      var v = document.createElement("span"); v.className = "row-value";
+      v.textContent = "Ep " + toRanges(theirs).map(rangeLabel).join(", ");
+      row.appendChild(l); row.appendChild(v); box.appendChild(row);
+    });
+    box.hidden = !box.children.length;
+    $("cal-day-empty").hidden = !!box.children.length;
+    $("cal-day-empty").textContent = k === dayKey(startOfToday()) ? "Nothing watched yet today." : "Nothing watched this day.";
+  }
+  function initCalendar() {
+    $("cal-grid").addEventListener("click", function (e) {
+      var cell = e.target.closest(".cal-cell[data-day]");
+      if (!cell) return;
+      cal.selected = cell.dataset.day;
+      Array.prototype.forEach.call(this.querySelectorAll(".cal-cell.selected"), function (c) {
+        c.classList.remove("selected");
+        c.setAttribute("aria-pressed", "false");
+      });
+      cell.classList.add("selected");
+      cell.setAttribute("aria-pressed", "true");
+      renderCalDay(myLog());
+    });
+    function openCalendar() { cal.selected = ""; renderCalendar(); openDialog($("calendar-sheet")); }
+    $("menu-calendar").addEventListener("click", openCalendar);
+    $("streak-chip").addEventListener("click", openCalendar);
+  }
+
   // ---------- Backup ----------
   function exportBackup() {
     var data = {
       app: "naruto-filler-guide", backup: 1, exported: new Date().toISOString(), name: profile.name || "",
-      watched: sorted(watched), skipped: sorted(skipped), changedAt: changedAt, ratings: ratings, favorites: sorted(favorites)
+      watched: sorted(watched), skipped: sorted(skipped), changedAt: changedAt, ratings: ratings, favorites: sorted(favorites),
+      notes: notes
     };
     var file = "naruto-filler-backup-" + new Date().toISOString().slice(0, 10) + ".json";
     var blob = new Blob([JSON.stringify(data, null, 1)], { type: "application/json" });
@@ -1041,12 +1261,15 @@
       pendingRestore = {
         watched: nums(d.watched), skipped: nums(d.skipped) || [], favorites: nums(d.favorites) || [],
         ratings: d.ratings && typeof d.ratings === "object" ? d.ratings : {},
-        name: typeof d.name === "string" ? d.name.slice(0, 30) : "", exported: d.exported
+        name: typeof d.name === "string" ? d.name.slice(0, 30) : "", exported: d.exported,
+        notes: d.notes && typeof d.notes === "object" ? cleanNotes(d.notes) : null, // older backups have none
+        changedAt: d.changedAt && typeof d.changedAt === "object" ? d.changedAt : {}
       };
       var when = Date.parse(d.exported);
       $("restore-text").textContent = "From " + (when ? formatDate(new Date(when)) : "an unknown date") + ": " +
         pendingRestore.watched.length + " watched, " + pendingRestore.skipped.length + " skipped, " +
-        Object.keys(pendingRestore.ratings).length + " ratings, " + pendingRestore.favorites.length + " favorites. " +
+        Object.keys(pendingRestore.ratings).length + " ratings, " + pendingRestore.favorites.length + " favorites" +
+        (pendingRestore.notes ? ", " + Object.keys(pendingRestore.notes).length + " notes" : "") + ". " +
         "This replaces what's on this device" + (sync.roomId ? " (and your progress on the shared list)" : "") + ".";
       openDialog($("restore-sheet"), $("restore-yes"));
     };
@@ -1060,13 +1283,18 @@
       var st = r.watched.indexOf(n) !== -1 ? "watched" : r.skipped.indexOf(n) !== -1 ? "skipped" : "none";
       if (stateOf(n) !== st) { setState(n, st); changed.push(n); }
     }
-    if (changed.length) recordChanges(changed);
+    // keep the backup's dates (the watch calendar uses them) unless this device changed the episode since
+    if (changed.length) recordChanges(changed, function (n) {
+      var t = r.changedAt[n];
+      return typeof t === "number" && t > (changedAt[n] || 0) && t <= Date.now() ? t : 0;
+    });
     ratings = {};
     Object.keys(r.ratings).forEach(function (k) {
       var n = Number(k), v = r.ratings[k];
       if (n >= 1 && n <= TOTAL && Number.isInteger(v) && v >= 1 && v <= 5) ratings[n] = v;
     });
     favorites = new Set(r.favorites);
+    if (r.notes) { notes = r.notes; save(STORAGE.notes, notes); }
     if (!profile.name && r.name) { profile.name = r.name; saveProfile(); renderName(); }
     savePersonal();
     for (var i = 0; i < TOTAL; i++) syncRow(i);
@@ -1197,6 +1425,12 @@
     });
     syncSegment($("ep-sheet-state"));
     renderStars($("ep-sheet-stars"), ratings[n] || 0);
+    var mine = notes[n] || {};
+    Array.prototype.forEach.call($("ep-sheet-reactions").children, function (b) {
+      b.setAttribute("aria-pressed", String(mine.e === b.dataset.e));
+    });
+    if (document.activeElement !== $("ep-sheet-note") || epSheet.noteFor !== n) $("ep-sheet-note").value = mine.x || "";
+    epSheet.noteFor = n;
     $("ep-sheet-fav").setAttribute("aria-pressed", String(favorites.has(n)));
     $("ep-sheet-fav-label").textContent = favorites.has(n) ? "Favorite" : "Add to Favorites";
 
@@ -1216,6 +1450,26 @@
       sub.textContent = st === "watched" ? "Watched " + formatDate(new Date(m.p[n].t)) : st === "skipped" ? "Skipped" : "Not watched yet";
       text.appendChild(name);
       text.appendChild(sub);
+      var their = m.n[n];
+      if (their) {
+        var note = document.createElement("span");
+        note.className = "person-note";
+        if (their.e) {
+          var em = document.createElement("span");
+          em.className = "person-react";
+          em.textContent = their.e;
+          note.appendChild(em);
+        }
+        if (their.x) {
+          var said = document.createElement("span");
+          said.className = "person-said";
+          said.textContent = their.x;
+          // their note may give the episode away
+          if (hideTitle) { said.classList.add("is-hidden-title"); said.setAttribute("aria-label", "Note hidden by the spoiler shield"); }
+          note.appendChild(said);
+        }
+        text.appendChild(note);
+      }
       row.appendChild(text);
       if (m.r[n] || m.f[n]) {
         var val = document.createElement("span");
@@ -1243,6 +1497,24 @@
     buildStars($("ep-sheet-stars"), "Your rating", function (v) { pickRating(epSheet.n, v); });
     $("ep-sheet-fav").addEventListener("click", function () { toggleFavorite(epSheet.n); });
     $("ep-sheet-reveal").addEventListener("click", function () { epSheet.revealed = true; renderEpSheet(); });
+    REACTIONS.forEach(function (r) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "reaction";
+      b.dataset.e = r[0];
+      b.textContent = r[0];
+      b.title = r[1];
+      b.setAttribute("aria-label", r[1]);
+      b.setAttribute("aria-pressed", "false");
+      b.addEventListener("click", function () {
+        var n = epSheet.n, on = !(notes[n] && notes[n].e === r[0]);
+        setNote(n, { e: on ? r[0] : "" });
+        renderEpSheet();
+        if (on) pop(b);
+      });
+      $("ep-sheet-reactions").appendChild(b);
+    });
+    $("ep-sheet-note").addEventListener("input", function () { setNote(epSheet.n, { x: this.value }); });
     Array.prototype.forEach.call($("ep-sheet-state").children, function (b) {
       b.addEventListener("click", function () {
         var n = epSheet.n;
@@ -1260,7 +1532,7 @@
       });
     });
     $("partner-line").addEventListener("click", function () { openEpSheet(Number($("partner-line").dataset.n)); });
-    setInterval(renderPartner, 60000); // keep "2h ago" current
+    setInterval(function () { renderPartner(); updateStreak(); }, 60000); // keep "2h ago" and the streak current
   }
 
   // ---------- Ratings & Favorites ----------
@@ -1297,6 +1569,14 @@
     favs.forEach(function (n) { $("fav-list").appendChild(topItem(n, "♥")); });
     $("fav-list").hidden = !favs.length;
     $("fav-empty").hidden = !!favs.length;
+    var noted = [];
+    for (var n = 1; n <= TOTAL; n++) if (reactionsFor(n).length || hasNoteText(n)) noted.push(n);
+    $("note-list").textContent = "";
+    noted.forEach(function (n) {
+      $("note-list").appendChild(topItem(n, reactionsFor(n).slice(0, 3).join("") + (hasNoteText(n) ? " 💬" : "")));
+    });
+    $("note-list").hidden = !noted.length;
+    $("note-empty").hidden = !!noted.length;
   }
 
   // ---------- Your name (asked on first launch) ----------
@@ -1606,7 +1886,7 @@
     var r = {}, f = {};
     Object.keys(ratings).forEach(function (n) { r[n] = ratings[n]; });
     favorites.forEach(function (n) { f[n] = true; });
-    var out = { name: (profile.name || "").trim().slice(0, 30) || "Someone", r: r, f: f };
+    var out = { name: (profile.name || "").trim().slice(0, 30) || "Someone", r: r, f: f, n: JSON.parse(JSON.stringify(notes)) };
     if (profile.last && profile.last.n) out.last = { n: profile.last.n, at: profile.last.at };
     return out;
   }
@@ -1630,6 +1910,7 @@
       if (m.last && Number.isInteger(m.last.n) && m.last.n >= 1 && m.last.n <= TOTAL && typeof m.last.at === "number") {
         clean.last = { n: m.last.n, at: m.last.at };
       }
+      clean.n = cleanNotes(m.n);
       clean.p = {};
       if (m.p && typeof m.p === "object") Object.keys(m.p).forEach(function (k) {
         var n = Number(k), e = m.p[k];
@@ -1643,9 +1924,27 @@
     membersBlocked = false;
     renderPartner();
     renderAllWho();
+    if (rows.length === TOTAL) for (var i = 0; i < TOTAL; i++) syncRow(i); // their reactions
+    updateStreak();
+    if ($("top-sheet").open) renderTop();
+    if ($("calendar-sheet").open) renderCalendar();
     renderDeck();
     if (epSheet.n) renderEpSheet();
     if (ratePrompt.n) renderRatePrompt();
+  }
+
+  /** Reactions on an episode: yours first, then the others' (no repeats). */
+  function reactionsFor(n) {
+    var out = [];
+    if (notes[n] && notes[n].e) out.push(notes[n].e);
+    if (sync.roomId) partners().forEach(function (m) {
+      var e = m.n[n] && m.n[n].e;
+      if (e && out.indexOf(e) === -1) out.push(e);
+    });
+    return out;
+  }
+  function hasNoteText(n) {
+    return !!(notes[n] && notes[n].x) || (!!sync.roomId && partners().some(function (m) { return m.n[n] && m.n[n].x; }));
   }
 
   /** Who else watched an episode (names). */
@@ -1703,7 +2002,9 @@
     line.hidden = !latest;
     if (!latest) return;
     line.dataset.n = latest.last.n;
-    $("partner-text").textContent = latest.name + " watched Ep " + latest.last.n + " · " + timeAgo(latest.last.at);
+    var said = latest.n[latest.last.n];
+    $("partner-text").textContent = latest.name + " watched Ep " + latest.last.n +
+      (said ? " " + (said.e || "") + (said.x ? (said.e ? " " : "") + "💬" : "") : "") + " · " + timeAgo(latest.last.at);
   }
 
   var STATUS_TEXT = {
@@ -2001,6 +2302,12 @@
 
     // Keep tabs in sync if progress changes in another tab/window
     window.addEventListener("storage", function (e) {
+      if (e.key === STORAGE.notes) {
+        notes = cleanNotes(load(STORAGE.notes, {}));
+        for (var k = 0; k < TOTAL; k++) syncRow(k);
+        if (epSheet.n) renderEpSheet();
+        return;
+      }
       if (e.key === STORAGE.ratings || e.key === STORAGE.favorites) { // rated in another tab
         var r = load(STORAGE.ratings, {}) || {};
         ratings = {};
@@ -2027,6 +2334,7 @@
     renderGuide();
     initRatePrompt();
     initEpSheet();
+    initCalendar();
     applyShield();
     initInstall();
     initWelcome();

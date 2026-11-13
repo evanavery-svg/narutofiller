@@ -493,6 +493,35 @@ const collapse = (nums) => {
     check("wrapped: lists your top episode and favorite arc", (await page.textContent("#wrapped-details")).includes("Ep 26") && (await page.textContent("#wrapped-details")).includes("Favorite arc"));
     await page.keyboard.press("Escape");
 
+    // Notes & reactions
+    await page.evaluate(() => document.querySelector("#ep-26 .ep-info").click());
+    await waitFor(() => isOpen("ep-sheet"), 2000);
+    check("notes: details show six reactions and a note field", (await page.locator("#ep-sheet-reactions .reaction").count()) === 6 && await page.isVisible("#ep-sheet-note"));
+    await page.click('#ep-sheet-reactions [data-e="😭"]');
+    check("notes: tapping a reaction selects it", (await page.getAttribute('#ep-sheet-reactions [data-e="😭"]', "aria-pressed")) === "true");
+    await page.click('#ep-sheet-reactions [data-e="🔥"]');
+    check("notes: only one reaction at a time", (await page.locator('#ep-sheet-reactions [aria-pressed="true"]').count()) === 1 && (await page.getAttribute('#ep-sheet-reactions [data-e="🔥"]', "aria-pressed")) === "true");
+    await page.click('#ep-sheet-reactions [data-e="🔥"]');
+    check("notes: tapping it again clears it", (await page.locator('#ep-sheet-reactions [aria-pressed="true"]').count()) === 0);
+    await page.click('#ep-sheet-reactions [data-e="😭"]');
+    await page.fill("#ep-sheet-note", "Haku's story got me");
+    await closeSheets();
+    check("notes: the row shows the reaction and a note icon", (await page.textContent("#ep-26 .ep-meta")).includes("😭") && (await page.locator("#ep-26 .meta-note").count()) === 1);
+    check("notes: saved on the device", await page.evaluate(() => JSON.parse(localStorage.getItem("naruto-filler:notes:v1"))["26"].x === "Haku's story got me"));
+    await page.reload();
+    await page.evaluate(() => document.querySelector("#ep-26 .ep-info").click());
+    await waitFor(() => isOpen("ep-sheet"), 2000);
+    check("notes: still there after a reload", (await page.inputValue("#ep-sheet-note")) === "Haku's story got me" && (await page.getAttribute('#ep-sheet-reactions [data-e="😭"]', "aria-pressed")) === "true");
+    await closeSheets();
+    await openMenu();
+    await page.click("#menu-top");
+    check("notes: listed under Notes & Reactions", (await page.locator("#note-list .top-item").count()) === 1 && (await page.textContent("#note-list")).includes("😭"));
+    await closeSheets();
+    await openMenu();
+    await page.click("#menu-wrapped");
+    check("notes: Wrapped shows your go-to reaction", (await page.textContent("#wrapped-details")).includes("Go-to reaction") && (await page.textContent("#wrapped-details")).includes("😭"));
+    await closeSheets();
+
     // Backup: save, clear, restore
     await openMenu();
     const [download] = await Promise.all([page.waitForEvent("download"), page.click("#menu-export")]);
@@ -500,6 +529,7 @@ const collapse = (nums) => {
     await download.saveAs(backupPath);
     const backup = JSON.parse(fs.readFileSync(backupPath, "utf8"));
     check("backup: file has watched episodes, ratings and favorites", backup.app === "naruto-filler-guide" && backup.watched.length === watchedCount && backup.ratings["26"] === 5 && backup.favorites.includes(1), download.suggestedFilename());
+    check("backup: file has your notes", backup.notes && backup.notes["26"] && backup.notes["26"].e === "😭");
     await openMenu();
     await page.click("#reset-button");
     await page.click("#reset-yes");
@@ -510,6 +540,7 @@ const collapse = (nums) => {
     check("backup: restore asks first, with a summary", (await page.textContent("#restore-text")).includes(`${watchedCount} watched`), await page.textContent("#restore-text"));
     await page.click("#restore-yes");
     check("backup: restored", (await page.locator(".episode input:checked").count()) === watchedCount && (await page.textContent("#ep-26 .ep-meta")).includes("5"));
+    check("backup: notes restored", (await page.textContent("#ep-26 .ep-meta")).includes("😭"));
     fs.writeFileSync(path.join(tmp, "not-a-backup.json"), "{\"hello\": 1}");
     await openMenu();
     await page.setInputFiles("#restore-file", path.join(tmp, "not-a-backup.json"));
@@ -536,6 +567,59 @@ const collapse = (nums) => {
       check("celebrate: says what's next", (await p.textContent("#celebrate-text")).includes("Next up: Chūnin Exams"), await p.textContent("#celebrate-text"));
       await p.click("#celebrate-ok");
       check("celebrate: Nice! closes it", !(await p.evaluate(() => document.getElementById("celebrate-sheet").open)));
+      await ctx.close();
+    }
+
+    // Watch calendar & streaks (fresh browser with a made-up history)
+    {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+      await ctx.addInitScript(presetProfile);
+      await ctx.addInitScript(() => {
+        if (localStorage.getItem("naruto-filler:watched:v1")) return;
+        const noon = (daysAgo) => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), d.getDate() - daysAgo, 12).getTime(); };
+        const watched = [], changed = {};
+        const mark = (n, t) => { watched.push(n); changed[n] = t; };
+        mark(1, Date.now() - 60000); mark(2, Date.now() - 30000);   // today: 2
+        mark(3, noon(1));                                          // yesterday: 1 ...
+        for (let n = 40; n < 50; n++) mark(n, noon(1) + 5);         // ... plus 10 from Mark Several (don't count)
+        mark(4, noon(2)); mark(5, noon(2) + 1000); mark(6, noon(2) + 2000); // 2 days ago: 3
+        mark(7, noon(5)); mark(8, noon(6));                         // an older 2-day run
+        localStorage.setItem("naruto-filler:watched:v1", JSON.stringify(watched));
+        localStorage.setItem("naruto-filler:changed:v1", JSON.stringify(changed));
+      });
+      const p = await ctx.newPage();
+      const errs = [];
+      p.on("pageerror", (e) => errs.push(e.message));
+      await p.goto(BASE);
+      check("streak: chip shows a 3-day streak", await p.isVisible("#streak-chip") && (await p.textContent("#streak-count")) === "3");
+      check("streak: watched today, so it isn't at risk", !(await p.getAttribute("#streak-chip", "class")).includes("at-risk"));
+      await p.click("#streak-chip");
+      check("calendar: the chip opens it", await p.evaluate(() => document.getElementById("calendar-sheet").open));
+      check("calendar: current 3, longest 3, 5 days watched", (await p.textContent("#cal-current")) === "3" && (await p.textContent("#cal-longest")) === "3" && (await p.textContent("#cal-days")) === "5",
+        [await p.textContent("#cal-current"), await p.textContent("#cal-longest"), await p.textContent("#cal-days")].join("/"));
+      check("calendar: 18 weeks of days", (await p.locator("#cal-grid .cal-cell").count()) === 18 * 7);
+      check("calendar: today is shaded and selected, with its episodes listed", (await p.getAttribute("#cal-grid .cal-cell.today", "data-level")) === "2" &&
+        (await p.getAttribute("#cal-grid .cal-cell.today", "aria-pressed")) === "true" && (await p.textContent("#cal-day-title")) === "Today" && (await p.locator("#cal-day-list .top-item").count()) === 2);
+      const yesterday = await p.evaluate(() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); });
+      await p.click(`#cal-grid [data-day="${yesterday}"]`);
+      check("calendar: tapping a day lists it (Mark Several left out)", (await p.textContent("#cal-day-title")) === "Yesterday" && (await p.locator("#cal-day-list .top-item").count()) === 1);
+      const empty = await p.evaluate(() => document.querySelector('#cal-grid .cal-cell[data-level="0"]').dataset.day);
+      await p.click(`#cal-grid [data-day="${empty}"]`);
+      check("calendar: an empty day says so", (await p.isHidden("#cal-day-list")) && (await p.textContent("#cal-day-empty")).includes("Nothing watched"));
+      check("calendar: fits the phone screen", await p.evaluate(() => { const g = document.getElementById("cal-grid"); return g.scrollWidth <= g.clientWidth + 1; }));
+      await p.evaluate(() => document.querySelectorAll("dialog[open]").forEach((d) => d.close()));
+      await p.click("#menu-open");
+      check("calendar: menu shows the streak", (await p.textContent("#menu-streak")) === "🔥 3");
+      await p.evaluate(() => document.querySelectorAll("dialog[open]").forEach((d) => d.close()));
+      await p.uncheck("#ep-1 input");
+      await p.uncheck("#ep-2 input");
+      check("streak: nothing today keeps it, marked at risk", (await p.textContent("#streak-count")) === "2" && (await p.getAttribute("#streak-chip", "class")).includes("at-risk"));
+      await p.check("#ep-1 input");
+      check("streak: watching today brings it back", (await waitFor(async () => (await p.textContent("#streak-count")) === "3", 2000)) === true && !(await p.getAttribute("#streak-chip", "class")).includes("at-risk"));
+      await p.click("#menu-open");
+      await p.click("#menu-wrapped");
+      check("calendar: Wrapped shows your longest streak and biggest binge", (await p.textContent("#wrapped-details")).includes("Longest streak") && (await p.textContent("#wrapped-details")).includes("3 episodes"));
+      check("calendar: no JS errors", errs.length === 0, errs.join(" | "));
       await ctx.close();
     }
 

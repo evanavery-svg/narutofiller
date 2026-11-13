@@ -87,6 +87,7 @@
     <section class="progress" aria-labelledby="tracker-title">
       <div class="progress-head">
         <h2 id="tracker-title" class="progress-title"><span id="progress-canon-text">0 of 130</span> canon watched</h2>
+        <button type="button" id="streak-chip" class="streak-chip" hidden><span aria-hidden="true">🔥</span> <span id="streak-count">0</span></button>
         <button type="button" id="sync-chip" class="sync-chip" data-state="connecting" hidden>Shared</button>
       </div>
       <div class="progress-track"><div id="progress-canon-bar" class="progress-bar" role="progressbar" aria-label="Canon episodes watched" aria-valuemin="0" aria-valuemax="130" aria-valuenow="0"></div></div>
@@ -186,6 +187,12 @@
         <button type="button" id="menu-wrapped" class="row row-button">
           <span class="row-icon purple"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span>
           <span class="row-label">Your Naruto Wrapped</span>
+          <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <button type="button" id="menu-calendar" class="row row-button">
+          <span class="row-icon red"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg></span>
+          <span class="row-label">Watch Calendar</span>
+          <span id="menu-streak" class="row-value"></span>
           <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
         </button>
         <button type="button" id="menu-sync" class="row row-button">
@@ -366,6 +373,10 @@
           <span id="ep-sheet-fav-label">Add to Favorites</span>
         </button>
       </div>
+      <div class="group padded note-box">
+        <div class="reactions" id="ep-sheet-reactions" role="group" aria-label="Your reaction"></div>
+        <textarea id="ep-sheet-note" class="text-field note-field" rows="2" maxlength="280" placeholder="Add a note…" aria-label="Your note on this episode"></textarea>
+      </div>
       <div id="ep-sheet-partners" class="group" hidden></div>
       <div class="group">
         <div class="row"><span class="row-label">Arc</span><span id="ep-sheet-arc" class="row-value"></span></div>
@@ -388,6 +399,9 @@
       <h3 class="sheet-subtitle">Favorites</h3>
       <div id="fav-list" class="group"></div>
       <p id="fav-empty" class="footnote empty-note">No favorites yet. Tap the heart on an episode to add it.</p>
+      <h3 class="sheet-subtitle">Notes &amp; Reactions</h3>
+      <div id="note-list" class="group"></div>
+      <p id="note-empty" class="footnote empty-note">No notes yet. Open an episode's details to react or leave a note.</p>
     </div>
   </dialog>
 
@@ -436,6 +450,34 @@
       <div class="button-stack">
         <button type="button" id="wrapped-share" class="button-filled">Share</button>
       </div>
+    </div>
+  </dialog>
+
+  <!-- ===== Watch calendar ===== -->
+  <dialog id="calendar-sheet" class="sheet tall" aria-labelledby="calendar-title">
+    <div class="sheet-inner">
+      <div class="sheet-head">
+        <h2 id="calendar-title" class="sheet-title" tabindex="-1">Watch Calendar</h2>
+        <button type="button" class="sheet-close" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+      <div class="stats">
+        <div class="stat"><span id="cal-current" class="stat-value accent">0</span><span class="stat-label">day streak</span></div>
+        <div class="stat"><span id="cal-longest" class="stat-value">0</span><span class="stat-label">longest streak</span></div>
+        <div class="stat"><span id="cal-days" class="stat-value">0</span><span id="cal-days-label" class="stat-label">days watched</span></div>
+      </div>
+      <div class="group padded cal-box">
+        <div id="cal-months" class="cal-months" aria-hidden="true"></div>
+        <div id="cal-grid" class="cal-grid"></div>
+        <div class="cal-legend" aria-hidden="true"><span>Less</span><i data-level="0"></i><i data-level="1"></i><i data-level="2"></i><i data-level="3"></i><i data-level="4"></i><span>More</span></div>
+      </div>
+      <h3 id="cal-day-title" class="sheet-subtitle"></h3>
+      <div id="cal-day-list" class="group"></div>
+      <p id="cal-day-empty" class="footnote empty-note"></p>
+      <div id="cal-people" hidden>
+        <h3 class="sheet-subtitle">Streaks</h3>
+        <div id="cal-people-list" class="group"></div>
+      </div>
+      <p class="footnote cal-note">A day counts when you mark episodes one at a time. Episodes from <strong>Mark Several</strong> don't count, since you probably watched them before.</p>
     </div>
   </dialog>
 

@@ -158,6 +158,35 @@ async function waitFor(fn, timeout = 8000) {
     check("people: B sees Ana's rating and favorite on ep 1", partnerRow.includes("Ana") && partnerRow.includes("★★★★☆") && partnerRow.includes("♥"), partnerRow);
     check("people: B's own rating is separate (none yet)", (await B.page.textContent("#ep-1 .ep-meta")) === "");
     await closeSheets(B.page);
+    // Notes and reactions: each sees the other's
+    await A.page.click("#ep-1 .ep-info");
+    await A.page.click('#ep-sheet-reactions [data-e="😂"]');
+    await A.page.fill("#ep-sheet-note", "Kakashi's bell test!");
+    await closeSheets(A.page);
+    await A.page.click("#ep-2 .ep-info");
+    await A.page.fill("#ep-sheet-note", "Big twist at the end");
+    await closeSheets(A.page);
+    check("notes: B's row shows Ana's reaction", (await waitFor(async () => (await B.page.textContent("#ep-1 .ep-meta")).includes("😂"), 10000)) === true, await B.page.textContent("#ep-1 .ep-meta"));
+    await B.page.click("#ep-1 .ep-info");
+    const noteRow = await B.page.textContent("#ep-sheet-partners");
+    check("notes: B sees Ana's reaction and note in the details", noteRow.includes("😂") && noteRow.includes("Kakashi's bell test!"), noteRow);
+    check("notes: B's own reaction stays empty", (await B.page.locator('#ep-sheet-reactions [aria-pressed="true"]').count()) === 0);
+    await closeSheets(B.page);
+    await waitFor(async () => (await B.page.locator("#ep-2 .meta-note").count()) === 1, 10000);
+    await openMenu(B.page);
+    await B.page.click("#spoiler-shield");
+    await closeSheets(B.page);
+    await B.page.click("#ep-2 .ep-info");
+    check("notes: spoiler shield blurs Ana's note on an episode B hasn't seen", (await B.page.locator("#ep-sheet-partners .person-said.is-hidden-title").count()) === 1);
+    await B.page.click("#ep-sheet-reveal");
+    check("notes: Show title reveals it", (await B.page.locator("#ep-sheet-partners .person-said.is-hidden-title").count()) === 0 && (await B.page.textContent("#ep-sheet-partners")).includes("Big twist"));
+    await closeSheets(B.page);
+    await openMenu(B.page);
+    await B.page.click("#spoiler-shield");
+    await B.page.click("#menu-calendar");
+    const streakRows = await B.page.textContent("#cal-people-list");
+    check("calendar: shows everyone's streaks", await B.page.isVisible("#cal-people") && streakRows.includes("You") && streakRows.includes("Ana") && streakRows.includes("🔥 1"), streakRows);
+    await closeSheets(B.page);
     // Changing your name shows up for the others
     await B.page.click("#menu-open");
     await B.page.click("#menu-name");

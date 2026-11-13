@@ -34,6 +34,7 @@ const int = (lo, hi) => lo + Math.floor(rnd() * (hi - lo + 1));
     const W = new Set(L("naruto-filler:watched:v1", [])), Sk = new Set(L("naruto-filler:skipped:v1", []));
     const prefs = L("naruto-filler:prefs:v1", {});
     const R = L("naruto-filler:ratings:v1", {});
+    const N = L("naruto-filler:notes:v1", {});
     for (let n = 1; n <= 220; n++) {
       const li = document.getElementById("ep-" + n), inp = li.querySelector("input");
       if (inp.checked !== W.has(n)) out.push(`ep ${n}: checkbox ${inp.checked} vs saved ${W.has(n)}`);
@@ -43,6 +44,11 @@ const int = (lo, hi) => lo + Math.floor(rnd() * (hi - lo + 1));
       const meta = li.querySelector(".ep-meta").textContent;
       if (R[n] && !meta.includes(String(R[n]))) out.push(`ep ${n}: rating ${R[n]} not shown`);
       if (!R[n] && /\d/.test(meta)) out.push(`ep ${n}: shows a rating it doesn't have (${meta})`);
+      const note = N[n] || {};
+      if (note.e && !meta.includes(note.e)) out.push(`ep ${n}: reaction ${note.e} not shown`);
+      if (!note.e && /[🔥😭😂😮😡💤]/u.test(meta)) out.push(`ep ${n}: shows a reaction it doesn't have`);
+      if (!!(note.x && note.x.trim()) !== !!li.querySelector(".meta-note")) out.push(`ep ${n}: note icon wrong`);
+      if (note.x && note.x.length > 280) out.push(`ep ${n}: note longer than 280`);
     }
     const canon = EPISODES.filter((e) => e.type !== "filler");
     const cw = canon.filter((e) => W.has(e.number)).length;
@@ -100,10 +106,12 @@ const int = (lo, hi) => lo + Math.floor(rnd() * (hi - lo + 1));
     guideJump: async () => { await closeAll(); await p.click("#menu-open"); await p.click("#menu-guide"); const n = int(1, 220); await p.click(`#guide-map .cell[data-n="${n}"]`); return "map jump " + n; },
     reset: async () => { if (int(0, 4)) return "reset (skipped)"; await closeAll(); await p.click("#menu-open"); await p.click("#reset-button"); if (await p.isVisible("#reset-yes")) await p.click("#reset-yes"); else await p.click("#reset-cancel"); return "reset"; },
     reload: async () => { if (int(0, 5)) return "reload (skipped)"; await p.reload(); await p.waitForFunction(() => document.documentElement.classList.contains("ready")); return "reload"; },
+    note: async () => { await closeAll(); const n = int(1, 220); await p.evaluate((k) => document.querySelector(`#ep-${k} .ep-info`).click(), n); const e = pick(["🔥", "😭", "😂", "😮", "😡", "💤"]); await p.click(`#ep-sheet-reactions [data-e="${e}"]`); if (int(0, 1)) await p.fill("#ep-sheet-note", pick(["", "wow", "so good <b>bold</b>", "a".repeat(400)])); await p.keyboard.press("Escape"); return `note ${n} ${e}`; },
+    calendar: async () => { await closeAll(); if (await p.isVisible("#streak-chip") && int(0, 1)) await p.click("#streak-chip"); else { await p.click("#menu-open"); await p.click("#menu-calendar"); } const cells = await p.locator("#cal-grid .cal-cell[data-day]").count(); if (cells) await p.locator("#cal-grid .cal-cell[data-day]").nth(int(0, cells - 1)).click(); await p.keyboard.press("Escape"); return "calendar"; },
     wrapped: async () => { await closeAll(); await p.click("#menu-open"); await p.click(pick(["#menu-wrapped", "#menu-top"])); await p.keyboard.press("Escape"); return "wrapped/top"; },
   };
   const names = Object.keys(actions);
-  const weights = { tickRandom: 6, deckWatch: 5, deckSkip: 2, undo: 3, filter: 2, search: 2, menuSwitch: 2, bulk: 2, rate: 3, rateBar: 2, arc: 2, guideJump: 1, reset: 1, reload: 1, wrapped: 1 };
+  const weights = { tickRandom: 6, deckWatch: 5, deckSkip: 2, undo: 3, filter: 2, search: 2, menuSwitch: 2, bulk: 2, rate: 3, rateBar: 2, arc: 2, guideJump: 1, reset: 1, reload: 1, wrapped: 1, note: 2, calendar: 1 };
   const bag = names.flatMap((n) => Array(weights[n]).fill(n));
   for (let i = 0; i < STEPS; i++) {
     const name = pick(bag);
