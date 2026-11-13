@@ -604,6 +604,7 @@
       var skipIt = done && !w && !a.numbers.every(function (n) { return skipped.has(n); });
       a.progress.textContent = skipIt ? "Skip" : done ? "Done" : w + "/" + a.numbers.length;
       a.el.classList.toggle("is-done", done && !skipIt);
+      a.el.classList.toggle("unstarted", !arcStarted(a)); // spoiler shield blurs its name
       var rated = a.numbers.filter(function (n) { return ratings[n]; });
       var avg = rated.length ? rated.reduce(function (sum, n) { return sum + ratings[n]; }, 0) / rated.length : 0;
       a.meta.textContent = a.metaBase + (avg ? " · ★ " + avg.toFixed(1) : "");
@@ -701,6 +702,7 @@
     $("deck-title").textContent = ep.title;
     var hide = prefs.shield && !deck.revealed[ep.number];
     $("deck-card").classList.toggle("is-hidden-title", hide);
+    $("deck-card").classList.toggle("is-hidden-arc", hide && !arcStarted(arcOf[ep.number - 1]));
     $("deck-label").textContent = hide ? "Up next · tap to reveal the title" : "Up next";
     var already = sync.roomId ? othersWho(ep.number) : [];
     $("deck-hint").textContent = (kind === "filler" ? "Anime-only. Safe to skip." : "Part of the manga's story.") +
@@ -880,6 +882,10 @@
   }
 
   // ---------- Spoiler shield ----------
+  /** You've watched or skipped at least one episode of this arc (its name is no spoiler). */
+  function arcStarted(a) {
+    return a.numbers.some(function (n) { return watched.has(n) || skipped.has(n); });
+  }
   function applyShield() {
     document.body.classList.toggle("shield", !!prefs.shield);
     mapCells.guide.forEach(function (cell, i) { // map tooltips
@@ -898,7 +904,7 @@
     $("celebrate-title").textContent = a.name + " complete!";
     var w = a.numbers.filter(function (n) { return watched.has(n); }).length;
     $("celebrate-text").textContent = w + " episode" + (w === 1 ? "" : "s") + " watched" +
-      (avg ? " · your average ★ " + avg.toFixed(1) : "") + (next ? ". Next up: " + next.name + "." : ". That's the whole series!");
+      (avg ? " · your average ★ " + avg.toFixed(1) : "") + (next ? ". Next up: " + (prefs.shield && !arcStarted(next) ? "the next arc" : next.name) + "." : ". That's the whole series!");
     openDialog($("celebrate-sheet"), $("celebrate-ok"));
     confetti($("confetti"));
   }
@@ -1180,6 +1186,7 @@
     $("ep-sheet-name").classList.toggle("is-hidden-title", hideTitle);
     $("ep-sheet-reveal").hidden = !hideTitle;
     $("ep-sheet-arc").textContent = ep.arc;
+    $("ep-sheet-arc").classList.toggle("is-hidden-title", hideTitle && !arcStarted(arcOf[n - 1]));
     $("ep-sheet-chapters").textContent = ep.chapters ? (ep.chapters.indexOf(",") === -1 ? "Chapter " : "Chapters ") + ep.chapters : "None (anime-only)";
     var when = watched.has(n) && changedAt[n];
     $("ep-sheet-date-row").hidden = !when;

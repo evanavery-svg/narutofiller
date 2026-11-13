@@ -598,6 +598,10 @@ label.row { cursor: pointer; }
 .ep-sheet-name.is-hidden-title,
 .deck-card.is-hidden-title .deck-title { filter: blur(7px); -webkit-user-select: none; user-select: none; }
 .deck-card.is-hidden-title .deck-title { filter: blur(12px); }
+/* arc names: blurred until you've started the arc */
+.shield .arc.unstarted .arc-name,
+.deck-card.is-hidden-arc .deck-arc,
+#ep-sheet-arc.is-hidden-title { filter: blur(6px); -webkit-user-select: none; user-select: none; }
 .reveal-button { margin: -10px 0 14px; font-size: 15px; }
 
 /* ---------- Arc complete ---------- */

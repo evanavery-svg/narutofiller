@@ -52,7 +52,7 @@ To keep things simple, the site sorts episodes into just two categories:
   - Time left counts the episodes still ahead of you, at about 23 minutes each.
   - The pace uses the episodes you've marked one at a time in the last two weeks; **Mark Several** and other bulk changes don't count.
   - It says "the series" instead of "canon" when **Skip filler when continuing** is off.
-- **Spoiler shield.** Turn it on in the **⋯** menu to blur the titles of episodes you haven't watched: in the list, on the up-next card, in **Ratings & Favorites**, and in the map's tooltips.
+- **Spoiler shield.** Turn it on in the **⋯** menu to blur the titles of episodes you haven't watched: in the list, on the up-next card, in **Ratings & Favorites**, and in the map's tooltips. It also blurs the names of arcs you haven't started (no episode watched or skipped yet): in the list's arc headers, on the up-next card and in an episode's details. The finished-arc card says "Next up: the next arc" instead of naming it.
   - The first tap on the up-next card reveals its title.
   - The details (**ⓘ**) panel has a **Show title** button.
   - Watched titles stay readable.
@@ -374,6 +374,9 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
   - the up-next card reveals its title on the first tap
   - the details panel's **Show title** works
   - turning it off shows everything
+  - names of arcs you haven't started blur, and started ones don't
+  - details blur the arc name too, and **Show title** reveals it
+  - watching an episode reveals its arc's name, and unwatching blurs it again
 - **Naruto Wrapped:** the stats, top episode and favorite arc.
 - **Backup:**
   - the saved file contains progress, ratings and favorites
@@ -444,7 +447,7 @@ It checks:
 - **Leave:** stopping sharing, and staying left after a reload.
 - **Security rules:** listing rooms, malformed codes, unexpected fields, deletes, and other collections are all refused.
 
-The last runs passed all 215 checks in `e2e-test.js` and all 60 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 95** in light mode (performance was 97–99 before the startup animation, which covers the first two seconds), and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
+The last runs passed all 221 checks in `e2e-test.js` and all 60 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 95** in light mode (performance was 97–99 before the startup animation, which covers the first two seconds), and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
 
 ## Legal
 

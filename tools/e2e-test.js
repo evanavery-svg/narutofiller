@@ -463,6 +463,27 @@ const collapse = (nums) => {
     await page.keyboard.press("Escape");
     await menuSwitch("spoiler-shield");
     check("shield: off again shows everything", (await blurOf(`#ep-${firstUnwatched} .ep-title`)) === "none");
+    // Arc names: blurred until you've watched or skipped something in the arc
+    await menuSwitch("spoiler-shield");
+    const arcBlur = (sel) => page.$eval(sel, (el) => getComputedStyle(el).filter);
+    const startedArc = await page.evaluate(() => [...document.querySelectorAll(".arc:not(.unstarted)")][0].id);
+    const unstartedArc = await page.evaluate(() => [...document.querySelectorAll(".arc.unstarted")].pop().id);
+    check("shield: names of arcs you haven't started are blurred", (await arcBlur(`#${unstartedArc} .arc-name`)).includes("blur"));
+    check("shield: names of arcs you've started stay readable", (await arcBlur(`#${startedArc} .arc-name`)) === "none");
+    const lastEp = await page.evaluate((id) => Number([...document.querySelectorAll(`#${id} .episode`)].pop().id.slice(3)), unstartedArc);
+    await page.click(`#${unstartedArc} .arc-head`);
+    await page.click(`#ep-${lastEp} .ep-info`);
+    check("shield: details blur the arc of an unstarted arc", (await arcBlur("#ep-sheet-arc")).includes("blur"));
+    await page.click("#ep-sheet-reveal");
+    check("shield: Show title reveals the arc too", (await arcBlur("#ep-sheet-arc")) === "none");
+    await page.click('#ep-sheet-state [data-state="watched"]');
+    await closeSheets();
+    check("shield: watching an episode reveals that arc's name", (await arcBlur(`#${unstartedArc} .arc-name`)) === "none");
+    // put it back (a finished arc folds away, so untick it directly)
+    await page.evaluate((n) => { const i = document.querySelector(`#ep-${n} input`); i.click(); }, lastEp);
+    check("shield: unwatching it blurs that arc's name again", (await arcBlur(`#${unstartedArc} .arc-name`)).includes("blur"));
+    await resetArcChoices();
+    await menuSwitch("spoiler-shield");
 
     // Naruto Wrapped
     await openMenu();
