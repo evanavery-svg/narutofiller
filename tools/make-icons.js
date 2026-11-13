@@ -105,7 +105,7 @@ function iconSvg({ size, rounded, scale, stroke }) {
   const o = (512 - s) / 2;
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="${size}" height="${size}">
   <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-    <stop offset="0" stop-color="#ffa24a"/><stop offset="1" stop-color="#e8590c"/></linearGradient></defs>
+    <stop offset="0" stop-color="#ffae45"/><stop offset="1" stop-color="#ec7b12"/></linearGradient></defs>
   <rect width="512" height="512" rx="${rounded ? 112 : 0}" fill="url(#bg)"/>
   <g transform="translate(${o.toFixed(1)} ${(o + 6 * scale).toFixed(1)}) scale(${(s / 100).toFixed(4)})">
     <path d="${LEAF}" fill="none" stroke="${INK}" stroke-width="${stroke}" stroke-linecap="round" stroke-linejoin="round"/>
