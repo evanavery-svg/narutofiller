@@ -106,7 +106,7 @@ const collapse = (nums) => {
     let navigations = 0;
     page.on("framenavigated", (f) => { if (f === page.mainFrame()) navigations++; });
     await page.goto(BASE);
-    await page.waitForSelector("#ep-220");
+    await page.waitForSelector("#ep-220", { state: "attached" });
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.waitForTimeout(1000);
     check("sw: first visit installs without reloading the page", navigations === 1, navigations);
@@ -118,9 +118,19 @@ const collapse = (nums) => {
     const closeSheets = () => page.evaluate(() => document.querySelectorAll("dialog[open]").forEach((d) => d.close()));
     const menuSwitch = async (id) => { await openMenu(); await page.click("#" + id); await closeSheets(); };
     const openGuide = async () => { await openMenu(); await page.click("#menu-guide"); };
+    const expandAllArcs = () => page.evaluate(() => document.querySelectorAll('.arc-head[aria-expanded="false"]').forEach((b) => b.click()));
+    const resetArcChoices = async () => {
+      await page.evaluate(() => {
+        const key = "naruto-filler:prefs:v1";
+        const p = JSON.parse(localStorage.getItem(key) || "{}");
+        p.arcOpen = {};
+        localStorage.setItem(key, JSON.stringify(p));
+      });
+      await page.reload();
+    };
 
     check("http: 220 episodes rendered", (await page.locator(".episode").count()) === 220);
-    check("http: main screen is just progress, search, switcher and list", (await page.locator("main > :not([hidden]):not(.empty-state)").count()) === 3);
+    check("http: main screen is progress, up-next card, search/switcher and list", (await page.locator("main > :not([hidden]):not(.empty-state)").count()) === 4);
     check("http: canon vs filler explained in the menu", (await page.textContent(".about")).includes("Filler"));
     check("categories: All / Canon / Filler switcher", (await page.$$eval("#filters [data-show]", (b) => b.map((x) => x.dataset.show).join(","))) === "all,canon,filler");
     check("categories: a 'mixed' episode (7) counts as canon (no Filler tag)", (await page.locator("#ep-7 .badge").count()) === 0);
@@ -165,6 +175,7 @@ const collapse = (nums) => {
     check("search: no match shows empty state", (await visibleNums()).length === 0 && (await page.locator("#empty-state").isVisible()));
     await page.fill("#search", "");
 
+    await expandAllArcs(); // so every episode row can be tapped
     // Tapping the episode's title (or number) ticks it too
     await page.click("#ep-50 .ep-title");
     check("row: tapping the title ticks the episode", await page.isChecked("#ep-50 input"));
@@ -178,22 +189,67 @@ const collapse = (nums) => {
     // Watch tracker
     for (const n of [1, 2, 3, 26]) await page.check(`#ep-${n} input`);
     check("tracker: progress 4 of 220", (await page.textContent("#progress-all-text")) === "4 of 220");
-    check("tracker: canon progress 3 of 130", (await page.textContent("#progress-canon-text")) === "3 of 130 canon episodes");
-    check("tracker: button says Continue", (await page.textContent("#next-label")) === "Continue");
-    // next ep (skip filler on by default)
-    check("next: skip filler default -> ep 4", (await page.textContent("#next-hint")).startsWith("Ep 4 "));
+    check("tracker: canon progress 3 of 130", (await page.textContent("#progress-canon-text")) === "3 of 130 canon");
+    // Up-next card (skips filler by default)
+    check("deck: shows episode 4 next", (await page.textContent("#deck-num")) === "Episode 4");
+    check("deck: shows its arc and title", (await page.textContent("#deck-arc")) === "Land of Waves" && (await page.textContent("#deck-title")) === E[3].title);
+    check("deck: canon card is green", (await page.getAttribute("#deck-card", "data-kind")) === "canon" && (await page.textContent("#deck-kind")) === "Canon");
     for (let n = 4; n <= 25; n++) await page.check(`#ep-${n} input`);
     await page.uncheck("#ep-26 input");
-    check("next: skip filler -> ep 27 (skips 26)", (await page.textContent("#next-hint")).startsWith("Ep 27 "));
+    check("deck: skip filler -> ep 27 (skips 26)", (await page.textContent("#deck-num")) === "Episode 27");
+    check("deck: the cards behind are shown", (await page.getAttribute("#deck-layer-1", "data-kind")) === "canon");
     await menuSwitch("skip-filler-next");
-    check("next: no skip -> ep 26", (await page.textContent("#next-hint")).startsWith("Ep 26 "));
+    check("deck: no skip -> ep 26", (await page.textContent("#deck-num")) === "Episode 26");
+    check("deck: filler card is red", (await page.getAttribute("#deck-card", "data-kind")) === "filler" && (await page.textContent("#deck-kind")) === "Filler");
+    // Skip -> 26 is marked skipped (not watched), next card comes up
+    await page.click("#deck-skip");
+    await waitFor(async () => (await page.textContent("#deck-num")) === "Episode 27", 3000);
+    check("deck: Skip moves to the next card", (await page.textContent("#deck-num")) === "Episode 27");
+    check("deck: skipped episode is marked in the list, not watched", (await page.locator("#ep-26.is-skipped").count()) === 1 && !(await page.isChecked("#ep-26 input")));
+    check("deck: skipped count shown", (await page.textContent("#progress-canon-text")).includes("1 skipped"));
+    await page.click(".toast-action");
+    check("deck: Undo brings the skipped card back", (await page.textContent("#deck-num")) === "Episode 26" && (await page.locator("#ep-26.is-skipped").count()) === 0);
+    // Watched -> ticked in the list, progress moves
+    await page.click("#deck-watch");
+    await waitFor(async () => (await page.textContent("#deck-num")) === "Episode 27", 3000);
+    check("deck: Watched ticks the episode", await page.isChecked("#ep-26 input") && (await page.textContent("#progress-all-text")) === "26 of 220");
+    await page.click(".toast-action");
+    check("deck: Undo unticks it", !(await page.isChecked("#ep-26 input")));
+    // skip then tap the row: becomes watched, no longer skipped
+    await page.click("#deck-skip");
+    await waitFor(async () => (await page.locator("#ep-26.is-skipped").count()) === 1, 3000);
+    await page.click("#ep-26 .ep-title");
+    check("row: tapping a skipped episode marks it watched", await page.isChecked("#ep-26 input") && (await page.locator("#ep-26.is-skipped").count()) === 0);
+    await page.uncheck("#ep-26 input");
     await menuSwitch("skip-filler-next");
+
+    // Arcs (back to the automatic open/fold behavior)
+    await resetArcChoices();
+    check("arcs: 32 sections in story order", (await page.locator(".arc").count()) === 32);
+    check("arcs: first is Land of Waves (1–19, canon)", (await page.textContent("#arc-0 .arc-name")) === "Land of Waves" && (await page.textContent("#arc-0 .arc-meta")) === "Episodes 1–19 · Canon");
+    check("arcs: Land of Tea is a filler arc", (await page.$$eval(".arc", (els) => els.filter((e) => e.querySelector(".arc-name").textContent === "Land of Tea Escort Mission" && e.dataset.kind === "filler").length)) === 1);
+    check("arcs: finished arc shows Done and is folded", (await page.textContent("#arc-0 .arc-progress")) === "Done" && !(await page.isVisible("#ep-1")));
+    check("arcs: the current arc is open", await page.isVisible("#ep-27") && (await page.getAttribute("#arc-1 .arc-head", "aria-expanded")) === "true");
+    check("arcs: progress per arc", (await page.textContent("#arc-1 .arc-progress")) === "6/48", await page.textContent("#arc-1 .arc-progress"));
+    await page.click("#arc-0 .arc-head");
+    check("arcs: tapping a header opens it", await page.isVisible("#ep-1"));
+    await page.reload();
+    check("arcs: your choice is remembered", await page.isVisible("#ep-1"));
+    await page.click("#arc-0 .arc-head");
+    check("arcs: tapping again folds it", !(await page.isVisible("#ep-1")));
+    await page.fill("#search", "special report");
+    check("arcs: a search opens matching sections", await page.isVisible("#ep-26") && (await page.locator(".arc:not([hidden])").count()) === 1);
+    await page.fill("#search", "");
+    await show("filler");
+    check("arcs: Filler hides canon-only arcs", !(await page.isVisible("#arc-0")) && await page.isVisible("#arc-1"));
+    await show("all");
+    await expandAllArcs();
     // jump while filter hides target
     await show("filler");
     await page.fill("#search", "zzz");
-    await page.click("#next-button");
+    await page.click("#deck-find");
     await page.waitForTimeout(700);
-    check("next: jump reveals hidden target ep 27", await page.locator("#ep-27").isVisible());
+    check("deck: tapping the card reveals ep 27 in the list", await page.locator("#ep-27").isVisible());
     check("next: target highlighted", await page.locator("#ep-27.is-highlight").count() === 1);
     check("next: target in viewport", await page.locator("#ep-27").evaluate((el) => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }));
     // hide watched

@@ -8,7 +8,7 @@
  * A new version of this file takes over immediately (no "update available" step).
  * Bump CACHE_VERSION only when the PRECACHE list changes.
  */
-const CACHE_VERSION = "v2.1.0";
+const CACHE_VERSION = "v2.2.0";
 const CACHE_NAME = "naruto-filler-" + CACHE_VERSION;
 const NETWORK_TIMEOUT_MS = 3500;
 

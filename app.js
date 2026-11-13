@@ -24,6 +24,7 @@
     watched: "naruto-filler:watched:v1",
     prefs: "naruto-filler:prefs:v1",
     changed: "naruto-filler:changed:v1", // { episodeNumber: last-change time in ms }
+    skipped: "naruto-filler:skipped:v1", // episodes skipped from the up-next deck
     room: "naruto-filler:room:v1"        // shared list code, if any
   };
 
@@ -39,15 +40,18 @@
   }
 
   // ---------- State ----------
-  var watched = new Set(
-    (load(STORAGE.watched, []) || []).filter(function (n) {
+  function loadNumbers(key) {
+    return new Set((load(key, []) || []).filter(function (n) {
       return Number.isInteger(n) && n >= 1 && n <= TOTAL;
-    })
-  );
+    }));
+  }
+  var watched = loadNumbers(STORAGE.watched);
+  var skipped = loadNumbers(STORAGE.skipped); // "not watching this one" (a skipped episode is never also watched)
   var defaultPrefs = {
     show: "all",          // "all" | "canon" | "filler"
     hideWatched: false,
-    skipFillerNext: true
+    skipFillerNext: true,
+    arcOpen: {}           // arc sections you opened/closed yourself ("name@firstEpisode": true/false)
   };
   var storedPrefs = load(STORAGE.prefs, {}) || {};
   var prefs = Object.assign({}, defaultPrefs, storedPrefs);
@@ -64,10 +68,19 @@
   function savePrefs() {
     save(STORAGE.prefs, prefs);
   }
+  function sorted(set) { return Array.from(set).sort(function (a, b) { return a - b; }); }
   function saveWatched() {
-    save(STORAGE.watched, Array.from(watched).sort(function (a, b) { return a - b; }));
+    save(STORAGE.watched, sorted(watched));
+    save(STORAGE.skipped, sorted(skipped));
     save(STORAGE.changed, changedAt);
   }
+  /** Sets one episode's state: "watched", "skipped" or "none". */
+  function setState(n, state) {
+    if (state === "watched") watched.add(n); else watched.delete(n);
+    if (state === "skipped") skipped.add(n); else skipped.delete(n);
+  }
+  function stateOf(n) { return watched.has(n) ? "watched" : skipped.has(n) ? "skipped" : "none"; }
+  function entryOf(n, t) { return { w: watched.has(n), s: skipped.has(n), t: t }; }
 
   // When each episode was last ticked/unticked on this device (or by a shared-list
   // partner). Used to merge shared lists: the most recent change to an episode wins.
@@ -93,7 +106,7 @@
     var entries = {};
     numbers.forEach(function (n) {
       changedAt[n] = t;
-      entries[n] = { w: watched.has(n), t: t };
+      entries[n] = entryOf(n, t);
     });
     saveWatched();
     if (sync.controller) sync.controller.push(entries);
@@ -189,69 +202,143 @@
   var rows = []; // index-aligned with EPISODES
   var CHECK_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
+  // Consecutive episodes with the same arc form one section of the list
+  var arcs = []; // { id, name, kind, start, end, numbers, el, list, head, progress }
+  EPISODES.forEach(function (ep) {
+    var last = arcs[arcs.length - 1];
+    if (last && last.name === ep.arc) { last.end = ep.number; last.numbers.push(ep.number); return; }
+    arcs.push({ id: "arc-" + arcs.length, name: ep.arc, start: ep.number, end: ep.number, numbers: [ep.number] });
+  });
+  arcs.forEach(function (a) {
+    var filler = a.numbers.filter(function (n) { return kindOf(EPISODES[n - 1]) === "filler"; }).length;
+    a.kind = filler * 2 > a.numbers.length ? "filler" : "canon";
+  });
+  var arcOf = []; // episode index -> arc
+  arcs.forEach(function (a) { a.numbers.forEach(function (n) { arcOf[n - 1] = a; }); });
+
+  var CHEVRON_SVG = '<svg class="arc-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>';
+
+  function buildRow(ep) {
+    var kind = kindOf(ep);
+    var li = document.createElement("li");
+    li.className = "episode";
+    li.id = "ep-" + ep.number;
+    li.dataset.type = kind;
+
+    // The whole row is one <label>, so tapping the number or title ticks it too
+    var row = document.createElement("label");
+    row.className = "ep-row";
+    var check = document.createElement("span");
+    check.className = "ep-check";
+    var input = document.createElement("input");
+    input.type = "checkbox";
+    input.dataset.number = ep.number;
+    input.setAttribute("aria-label", "Watched episode " + ep.number + ": " + ep.title);
+    var box = document.createElement("span");
+    box.className = "box";
+    box.innerHTML = CHECK_SVG;
+    check.appendChild(input);
+    check.appendChild(box);
+
+    var num = document.createElement("span");
+    num.className = "ep-number";
+    num.textContent = ep.number;
+
+    var main = document.createElement("span");
+    main.className = "ep-main";
+    var title = document.createElement("span");
+    title.className = "ep-title";
+    title.textContent = ep.title;
+    main.appendChild(title);
+    if (kind === "filler") {
+      var badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = "Filler";
+      main.appendChild(badge);
+    }
+
+    row.appendChild(check);
+    row.appendChild(num);
+    row.appendChild(main);
+    li.appendChild(row);
+    rows.push({ li: li, input: input });
+    return li;
+  }
+
   function buildList() {
-    var list = $("episode-list");
+    var container = $("episode-list");
     var frag = document.createDocumentFragment();
-    EPISODES.forEach(function (ep) {
-      var kind = kindOf(ep);
-      var li = document.createElement("li");
-      li.className = "episode";
-      li.id = "ep-" + ep.number;
-      li.dataset.type = kind;
+    arcs.forEach(function (a) {
+      var section = document.createElement("section");
+      section.className = "arc card";
+      section.id = a.id;
+      section.dataset.kind = a.kind;
 
-      // The whole row is one <label>, so tapping the number or title ticks it too
-      var row = document.createElement("label");
-      row.className = "ep-row";
-      var check = document.createElement("span");
-      check.className = "ep-check";
-      var input = document.createElement("input");
-      input.type = "checkbox";
-      input.dataset.number = ep.number;
-      input.setAttribute("aria-label", "Watched episode " + ep.number + ": " + ep.title);
-      var box = document.createElement("span");
-      box.className = "box";
-      box.innerHTML = CHECK_SVG;
-      check.appendChild(input);
-      check.appendChild(box);
+      var head = document.createElement("button");
+      head.type = "button";
+      head.className = "arc-head";
+      head.setAttribute("aria-controls", a.id + "-list");
+      var dot = document.createElement("span");
+      dot.className = "arc-dot";
+      dot.setAttribute("aria-hidden", "true");
+      var text = document.createElement("span");
+      text.className = "arc-text";
+      var name = document.createElement("span");
+      name.className = "arc-name";
+      name.textContent = a.name;
+      var meta = document.createElement("span");
+      meta.className = "arc-meta";
+      meta.textContent = (a.start === a.end ? "Episode " + a.start : "Episodes " + a.start + "–" + a.end) +
+        " · " + (a.kind === "filler" ? "Filler" : "Canon");
+      text.appendChild(name);
+      text.appendChild(meta);
+      var progress = document.createElement("span");
+      progress.className = "arc-progress";
+      head.appendChild(dot);
+      head.appendChild(text);
+      head.appendChild(progress);
+      head.insertAdjacentHTML("beforeend", CHEVRON_SVG);
+      head.addEventListener("click", function () { setArcOpen(a, !isArcOpen(a)); });
 
-      var num = document.createElement("span");
-      num.className = "ep-number";
-      num.textContent = ep.number;
+      var list = document.createElement("ol");
+      list.className = "arc-episodes";
+      list.id = a.id + "-list";
+      a.numbers.forEach(function (n) { list.appendChild(buildRow(EPISODES[n - 1])); });
 
-      var main = document.createElement("span");
-      main.className = "ep-main";
-      var title = document.createElement("span");
-      title.className = "ep-title";
-      title.textContent = ep.title;
-      main.appendChild(title);
-      if (kind === "filler") { // canon is the default, so only filler is tagged
-        var badge = document.createElement("span");
-        badge.className = "badge";
-        badge.textContent = "Filler";
-        main.appendChild(badge);
-      }
-
-      row.appendChild(check);
-      row.appendChild(num);
-      row.appendChild(main);
-      li.appendChild(row);
-      frag.appendChild(li);
-      rows.push({ li: li, input: input });
+      section.appendChild(head);
+      section.appendChild(list);
+      frag.appendChild(section);
+      a.el = section; a.head = head; a.list = list; a.progress = progress;
     });
-    list.appendChild(frag);
+    container.appendChild(frag);
 
     // One delegated listener for all checkboxes
-    list.addEventListener("change", function (e) {
+    container.addEventListener("change", function (e) {
       var input = e.target;
       if (!input.matches('input[type="checkbox"]')) return;
       var n = Number(input.dataset.number);
-      if (input.checked) watched.add(n); else watched.delete(n);
+      setState(n, input.checked ? "watched" : "none");
       recordChanges([n]);
       syncRow(n - 1);
       if (input.checked) pop(input.nextElementSibling);
       updateProgress();
       if (prefs.hideWatched) applyFilters();
     });
+  }
+
+  // Which arc sections are expanded. The arc you're up to opens by itself; finished ones fold
+  // away. Once you open or close a section yourself, that choice is remembered.
+  function arcKey(a) { return a.name + "@" + a.start; }
+  function isArcOpen(a) {
+    var key = arcKey(a);
+    if (Object.prototype.hasOwnProperty.call(prefs.arcOpen, key)) return prefs.arcOpen[key];
+    var next = nextEpisode();
+    return !!next && arcOf[next.number - 1] === a;
+  }
+  function setArcOpen(a, open) {
+    prefs.arcOpen[arcKey(a)] = open;
+    savePrefs();
+    applyFilters();
   }
 
   function pop(el) {
@@ -281,9 +368,10 @@
     });
   }
   function syncRow(i) {
-    var on = watched.has(EPISODES[i].number);
-    rows[i].input.checked = on;
-    rows[i].li.classList.toggle("is-watched", on);
+    var n = EPISODES[i].number;
+    rows[i].input.checked = watched.has(n);
+    rows[i].li.classList.toggle("is-watched", watched.has(n));
+    rows[i].li.classList.toggle("is-skipped", skipped.has(n));
   }
 
   // ---------- Filtering + search ----------
@@ -310,21 +398,41 @@
       rows[i].li.hidden = !vis;
       if (vis) shown++;
     }
+    arcs.forEach(function (a) {
+      var visible = a.numbers.some(function (n) { return !rows[n - 1].li.hidden; });
+      var open = visible && (isArcOpen(a) || !!query); // a search opens every section with a match
+      a.el.hidden = !visible;
+      a.list.hidden = !open;
+      a.el.classList.toggle("is-open", open);
+      a.head.setAttribute("aria-expanded", String(open));
+    });
     $("empty-state").hidden = shown !== 0;
+  }
+
+  function updateArcProgress() {
+    arcs.forEach(function (a) {
+      var w = a.numbers.filter(function (n) { return watched.has(n); }).length;
+      var done = a.numbers.every(function (n) { return watched.has(n) || skipped.has(n); });
+      a.progress.textContent = done ? "Done" : w + "/" + a.numbers.length;
+      a.el.classList.toggle("is-done", done);
+    });
   }
 
   // ---------- Progress + next episode ----------
   var canonEpisodes = EPISODES.filter(function (e) { return kindOf(e) === "canon"; });
 
-  function nextEpisode() {
-    for (var i = 0; i < TOTAL; i++) {
+  /** The next episodes still to do (not watched or skipped), in order. */
+  function upcoming(count) {
+    var out = [];
+    for (var i = 0; i < TOTAL && out.length < count; i++) {
       var ep = EPISODES[i];
-      if (watched.has(ep.number)) continue;
-      if (prefs.skipFillerNext && ep.type === "filler") continue;
-      return ep;
+      if (watched.has(ep.number) || skipped.has(ep.number)) continue;
+      if (prefs.skipFillerNext && kindOf(ep) === "filler") continue;
+      out.push(ep);
     }
-    return null;
+    return out;
   }
+  function nextEpisode() { return upcoming(1)[0] || null; }
 
   function setBar(id, value, max) {
     var bar = $(id);
@@ -338,36 +446,91 @@
     var canon = canonEpisodes.filter(function (e) { return watched.has(e.number); }).length;
     var pct = Math.round((total / TOTAL) * 100);
     $("progress-all-text").textContent = total + " of " + TOTAL;
-    $("progress-canon-text").textContent = canon + " of " + canonEpisodes.length + " canon episodes";
+    $("progress-canon-text").textContent = canon + " of " + canonEpisodes.length + " canon" +
+      (skipped.size ? " · " + skipped.size + " skipped" : "");
     setBar("progress-all-bar", total, TOTAL);
+    updateArcProgress();
+    renderDeck();
+    if (rows.length === TOTAL && arcs[0].el) applyFilters(); // the current arc may have changed
 
-    var next = nextEpisode();
-    $("next-label").textContent = total ? "Continue" : "Start Watching";
-    $("next-hint").textContent = next
-      ? "Ep " + next.number + " · " + next.title
-      : (prefs.skipFillerNext ? "All non-filler episodes watched!" : "You've watched everything!");
-
-    var n = watched.size;
+    var n = watched.size + skipped.size;
     $("reset-question").textContent = n
-      ? "Clear all " + n + " watched episode" + (n === 1 ? "" : "s") +
+      ? "Clear all " + n + " watched or skipped episode" + (n === 1 ? "" : "s") +
         (sync.roomId ? " for everyone on the shared list" : "") + "? This can't be undone."
       : "Nothing to reset yet.";
     $("reset-yes").hidden = n === 0;
   }
 
-  function jumpToNext() {
-    var ep = nextEpisode();
+  // ---------- Up-next deck (one card at a time) ----------
+  var deckBusy = false;
+  function reduceMotion() {
+    return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  }
+  function renderDeck() {
+    if (deckBusy) return;
+    var eps = upcoming(3);
+    var ep = eps[0];
+    $("deck").dataset.count = String(eps.length);
+    $("deck-card").hidden = !ep;
+    $("deck-empty").hidden = !!ep;
+    $("deck-layer-1").dataset.kind = eps[1] ? kindOf(eps[1]) : "none";
+    $("deck-layer-2").dataset.kind = eps[2] ? kindOf(eps[2]) : "none";
     if (!ep) {
-      toast(prefs.skipFillerNext ? "No unwatched non-filler episodes left." : "You've watched every episode!");
+      $("deck-empty-text").textContent = prefs.skipFillerNext
+        ? "You've finished every canon episode." + (skipped.size ? " Skipped episodes are marked in the list." : "")
+        : "You've been through every episode.";
       return;
     }
-    jumpTo(ep);
+    var kind = kindOf(ep);
+    $("deck-card").dataset.kind = kind;
+    $("deck-arc").textContent = ep.arc;
+    $("deck-kind").textContent = kind === "filler" ? "Filler" : "Canon";
+    $("deck-num").textContent = "Episode " + ep.number;
+    $("deck-title").textContent = ep.title;
+    $("deck-hint").textContent = kind === "filler" ? "Anime-only. Safe to skip." : "Part of the manga's story.";
+    $("deck-find").setAttribute("aria-label", "Show episode " + ep.number + " in the list");
+  }
+
+  /** "watched" or "skipped": the card flies off and the next one comes up. */
+  function deckAct(state) {
+    var ep = nextEpisode();
+    if (!ep || deckBusy) return;
+    var n = ep.number, before = stateOf(n);
+    var card = $("deck-card");
+    deckBusy = true;
+    card.classList.add(state === "watched" ? "fly-right" : "fly-left");
+    setTimeout(function () {
+      setState(n, state);
+      recordChanges([n]);
+      syncRow(n - 1);
+      card.classList.remove("fly-right", "fly-left");
+      deckBusy = false;
+      updateProgress();
+      applyFilters();
+      if (!reduceMotion()) {
+        card.classList.add("enter");
+        setTimeout(function () { card.classList.remove("enter"); }, 320);
+      }
+      toast((state === "watched" ? "Watched" : "Skipped") + " episode " + n, "Undo", function () {
+        setState(n, before);
+        recordChanges([n]);
+        syncRow(n - 1);
+        updateProgress();
+        applyFilters();
+      });
+    }, reduceMotion() ? 0 : 260);
+  }
+  function initDeck() {
+    $("deck-watch").addEventListener("click", function () { deckAct("watched"); });
+    $("deck-skip").addEventListener("click", function () { deckAct("skipped"); });
+    $("deck-find").addEventListener("click", function () { var ep = nextEpisode(); if (ep) jumpTo(ep); });
   }
 
   /** Scrolls the list to an episode, adjusting filters/search if they hide it. */
   function jumpTo(ep) {
     var i = ep.number - 1;
     closeAllSheets();
+    if (!isArcOpen(arcOf[i])) setArcOpen(arcOf[i], true);
     // Make sure the target is visible: clear search / enable its type if needed.
     if (!isVisible(i)) {
       if (prefs.hideWatched && watched.has(ep.number)) {
@@ -398,8 +561,9 @@
     else $("reset-button").focus();
   }
   function doReset() {
-    var cleared = Array.from(watched);
+    var cleared = sorted(watched).concat(sorted(skipped));
     watched.clear();
+    skipped.clear();
     recordChanges(cleared);
     for (var i = 0; i < TOTAL; i++) syncRow(i);
     updateProgress();
@@ -449,23 +613,26 @@
     updateProgress();
     applyFilters();
   }
-  function setWatchedMany(nums, on) {
-    nums.forEach(function (n) { if (on) watched.add(n); else watched.delete(n); });
+  function applyStates(nums, stateFor) {
+    nums.forEach(function (n) { setState(n, stateFor(n)); });
     recordChanges(nums);
     refreshAfterBulk(nums);
   }
   function applyBulk(markWatched) {
     var r = bulkRange();
     if (!r) return;
-    var changed = r.nums.filter(function (n) { return watched.has(n) !== markWatched; });
+    var target = markWatched ? "watched" : "none";
+    var changed = r.nums.filter(function (n) { return stateOf(n) !== target; });
     closeDialog($("bulk-sheet"));
     if (!changed.length) {
       toast(markWatched ? "Those episodes were already watched" : "Those episodes weren't marked as watched");
       return;
     }
-    setWatchedMany(changed, markWatched);
+    var before = {};
+    changed.forEach(function (n) { before[n] = stateOf(n); });
+    applyStates(changed, function () { return target; });
     toast((markWatched ? "Marked " : "Unmarked ") + changed.length + " episode" + (changed.length === 1 ? "" : "s"),
-      "Undo", function () { setWatchedMany(changed, !markWatched); });
+      "Undo", function () { applyStates(changed, function (n) { return before[n]; }); });
   }
   function openBulk() {
     $("bulk-from").value = "1";
@@ -583,7 +750,7 @@
     var out = {};
     for (var n = 1; n <= TOTAL; n++) {
       var t = changedAt[n] || 0;
-      if (t || watched.has(n)) out[n] = { w: watched.has(n), t: t };
+      if (t || watched.has(n) || skipped.has(n)) out[n] = entryOf(n, t);
     }
     return out;
   }
@@ -598,21 +765,22 @@
     for (var n = 1; n <= TOTAL; n++) {
       var r = remote[n];
       var valid = r && typeof r.w === "boolean" && typeof r.t === "number";
-      var lw = watched.has(n);
+      var lw = watched.has(n), ls = skipped.has(n);
       var lt = changedAt[n] || 0;
       if (!valid) {
-        if (lt || lw) toPush[n] = { w: lw, t: lt };
+        if (lt || lw || ls) toPush[n] = entryOf(n, lt);
         continue;
       }
+      var rs = r.s === true && !r.w; // older versions had no "s"
       if (r.t > lt || (r.t === lt && r.w && !lw)) {
-        if (r.w !== lw) {
-          if (r.w) watched.add(n); else watched.delete(n);
+        if (r.w !== lw || rs !== ls) {
+          setState(n, r.w ? "watched" : rs ? "skipped" : "none");
           changed.push(n);
         }
         changedAt[n] = r.t;
         lastStamp = Math.max(lastStamp, r.t);
       } else if (lt > r.t || (lt === r.t && lw && !r.w)) {
-        toPush[n] = { w: lw, t: lt };
+        toPush[n] = entryOf(n, lt);
       }
     }
     saveWatched();
@@ -866,15 +1034,16 @@
       prefs.skipFillerNext = skipNext.checked; savePrefs(); updateProgress();
     });
 
-    $("next-button").addEventListener("click", jumpToNext);
+    initDeck();
     $("reset-button").addEventListener("click", function () { showResetConfirm(true); });
     $("reset-cancel").addEventListener("click", function () { showResetConfirm(false); });
     $("reset-yes").addEventListener("click", doReset);
 
     // Keep tabs in sync if progress changes in another tab/window
     window.addEventListener("storage", function (e) {
-      if (e.key !== STORAGE.watched) return;
-      watched = new Set(load(STORAGE.watched, []));
+      if (e.key !== STORAGE.watched && e.key !== STORAGE.skipped) return;
+      watched = loadNumbers(STORAGE.watched);
+      skipped = loadNumbers(STORAGE.skipped);
       var c = load(STORAGE.changed, {}) || {};
       Object.keys(c).forEach(function (k) { changedAt[k] = c[k]; lastStamp = Math.max(lastStamp, c[k]); });
       for (var i = 0; i < TOTAL; i++) syncRow(i);
@@ -883,6 +1052,7 @@
     });
 
     initSheets();
+    if (!prefs.arcOpen || typeof prefs.arcOpen !== "object") prefs.arcOpen = {};
     applyFilters();
     updateProgress();
     renderGuide();

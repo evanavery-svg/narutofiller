@@ -148,6 +148,14 @@ async function waitFor(fn, timeout = 8000) {
     await A.page.click(".toast-action");
     check("bulk: Undo on A reaches B", same(await waitFor(async () => { const b = await watchedOf(B.page); return same(b, live) && b; }, 10000), live), (await watchedOf(B.page)).join(","));
 
+    // Skipping from the up-next card syncs too
+    await closeSheets(A.page);
+    const skipNum = Number((await A.page.textContent("#deck-num")).replace(/\D/g, ""));
+    await A.page.click("#deck-skip");
+    check(`skip: skipping episode ${skipNum} on A shows as skipped on B`, (await waitFor(async () => (await B.page.locator(`#ep-${skipNum}.is-skipped`).count()) === 1, 10000)) === true);
+    await A.page.click(".toast-action");
+    check("skip: Undo on A reaches B", (await waitFor(async () => (await B.page.locator(`#ep-${skipNum}.is-skipped`).count()) === 0, 10000)) === true);
+
     // B goes offline and makes changes; A changes in the meantime
     await B.context.setOffline(true);
     await tick(B.page, 5);

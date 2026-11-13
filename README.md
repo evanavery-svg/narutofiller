@@ -16,20 +16,31 @@ To keep things simple, the site sorts episodes into just two categories:
 ## Features
 
 - **Simple, Apple-style design.** It uses the system font (San Francisco on Apple devices), grouped lists like the iPhone Settings app, switches and segmented controls. Naruto orange is the accent color.
-  - The main screen has only your progress, a **Continue** button, search, the **All / Canon / Filler** control and the episode list.
+  - The main screen has your progress, the **up-next card**, search, the **All / Canon / Filler** control and the episode list grouped by arc.
   - Everything else is in the **⋯** menu at the top right: Mark Several Episodes, the Skip-Filler Guide, Watch Together, Get the App, the two settings, Reset Progress, and where the data comes from.
 - **Light and dark mode.** These follow the phone or computer's own setting automatically.
-- **Episode list.** All 220 episodes, each with its number and title. Filler episodes get a small **Filler** tag; anything without a tag is canon. The **⋯** menu explains the difference in one sentence.
+- **Up-next card.** A big card shows the next episode to watch: its arc, number and title, colored **green for canon** and **red for filler**. Two more cards peek out behind it, like a deck.
+  - **Watched** flips the card away to the right and brings up the next one.
+  - **Skip** flips it away to the left and marks the episode as *skipped*. It won't come back, and it isn't counted as watched.
+  - Both show a message with **Undo**.
+  - Tapping the card shows that episode in the list.
+  - When everything's done, an "All caught up!" card appears.
+- **Episodes grouped by arc.** The list is split into the story arcs (Land of Waves, Chūnin Exams, Konoha Crush, Search for Tsunade, Sasuke Recovery Mission) and the filler missions after them, in order. Each section shows its episode range, whether it's a canon or filler arc (green or red dot), and your progress ("6/48", or "Done").
+  - The arc you're up to opens by itself, and finished arcs fold away.
+  - Tap a section to open or close it; that choice is remembered.
+  - A search opens every section with a match.
+- **Color-coded episodes.** Every row has a green (canon) or red (filler) stripe and episode number. Filler episodes also get a red **Filler** tag. Skipped episodes show a dash in their circle.
 - **All / Canon / Filler.** A segmented control above the list shows everything, only canon, or only filler.
 - **Search.** One box that matches the episode number (`135`, `#135`, `ep 135`) or any part of the title. It ignores case and updates as you type. It works together with the filters.
 - **Watch tracker.**
   - A round checkbox on each episode, saved in `localStorage`. Tapping anywhere on the row (the number or title too) ticks it.
-  - A progress bar showing "40 of 220 watched", with the canon count underneath (out of 130).
-  - A **Continue** button that scrolls to the next unwatched episode. The **Skip filler when continuing** switch controls whether it skips filler. If the All / Canon / Filler control or the search hides that episode, the button changes them so you can see it.
+  - A progress bar showing "40 of 220 watched", with the canon count (out of 130) and how many you skipped.
+  - The **Skip filler when continuing** switch (in the **⋯** menu, on by default) controls whether filler episodes appear in the up-next card at all.
+  - If the All / Canon / Filler control or the search hides an episode you jump to, they change so you can see it.
   - **Mark Several Episodes** (in the **⋯** menu): pick a range (for example 1 to 80) and mark it all as watched or unwatched at once, optionally skipping filler. A message with **Undo** confirms it.
   - A **Hide watched episodes** switch (in the **⋯** menu).
   - **Reset Progress** (in the **⋯** menu), which asks you to confirm first.
-- **Watch together.** Two (or more) people can share one watched list through a free Firebase database. Episodes either of you ticks show up on the other's phone within a second or two, and changes made offline sync later. It's off until you add your own Firebase project; see [Shared progress (Firebase)](#shared-progress-firebase). It lives in the **⋯** menu. While you're sharing, a small **Shared** label next to your progress shows the sync status, and tapping it opens Watch Together.
+- **Watch together.** Two (or more) people can share one watched list through a free Firebase database. Episodes either of you ticks or skips show up on the other's phone within a second or two, and changes made offline sync later. It's off until you add your own Firebase project; see [Shared progress (Firebase)](#shared-progress-firebase). It lives in the **⋯** menu. While you're sharing, a small **Shared** label next to your progress shows the sync status, and tapping it opens Watch Together.
 - **Skip-filler guide.** A separate page (in the **⋯** menu) that lists the episodes to watch, collapsed into ranges, and the episodes to skip, with a map showing which to watch. Watch **1–25, 27–96, 98–100, 107–135, 141–142, 220** (130 episodes) and skip the 90 filler episodes, which saves about **34 h 30 min** at about 23 minutes per episode.
 - **PWA.** You can install it on a phone or desktop. Every file is saved on the first visit, so the whole app then works offline.
 - **Get the app.** **Get the App** in the **⋯** menu shows step-by-step install instructions for the device you're on (iPhone/iPad, Android or desktop). They also pop up by themselves when someone opens a Watch together invite link on a phone.
@@ -181,6 +192,8 @@ From then on:
 - **Main source:** [Anime Filler List: Naruto](https://www.animefillerlist.com/shows/naruto), retrieved 2026-11-12. Every episode's number, title and type comes from its episode table. The table also matches the summary range lists at the top of the same page exactly.
 - **Cross-check:** the [Naruto Fandom wiki](https://naruto.fandom.com/wiki/List_of_Animated_Media). Each of the 220 episode pages has an infobox field (`chapters`) listing the manga chapters the episode adapts. An episode with no chapters listed is anime-original.
 
+**Arcs** come from the Fandom wiki: each episode page names its arc. Names are shortened ("Chūnin Exams (Arc)" → "Chūnin Exams", "Prologue — Land of Waves" → "Land of Waves"). The 14 episodes with no arc listed are grouped as "Standalone". A section counts as a filler arc when most of its episodes are filler. Three mixed episodes sit at the start of filler arcs: 141 (Land of Rice Fields Investigation Mission), 142 (Mizuki Tracking Mission) and 220 (Sunagakure Support Mission).
+
 Type mapping in `data/episodes.js`: *Manga Canon* → `canon`, *Mixed Canon/Filler* → `mixed`, *Filler* → `filler`, *Anime Canon* → `anime-canon`. The site then shows `filler` as **Filler** and everything else as **Canon**.
 
 To check the data file yourself, run `node tools/validate-data.js`:
@@ -191,6 +204,7 @@ Episodes: 220
   mixed        56
   filler       90
   anime-canon  0
+Arcs: 23 (14 standalone episodes)
 
 OK: 220 episodes, numbered 1–220, no gaps or duplicates.
 ```
@@ -232,7 +246,7 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
 
 `node tools/e2e-test.js` copies the site into a `/naruto-filler/` subpath, serves it with `python3 -m http.server`, and drives it with Playwright and Chromium. It checks:
 
-- **Data:** each type's episode list matches Anime Filler List's published range lists.
+- **Data:** each type's episode list matches Anime Filler List's published range lists, and every episode has an arc (`node tools/validate-data.js`).
 - **`file://`:** the page renders, has no errors, doesn't try to register a service worker, and keeps watched episodes.
 - **All / Canon / Filler:** each option shows the right episodes, and a search with no matches shows an empty state.
 - **Search:** case-insensitive title matches, number matches, and search combined with the filler filter.
@@ -244,11 +258,25 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
   - watched episodes surviving a reload
   - reset with both confirm and cancel
 - **Main screen and menu:**
-  - the main screen holds only progress, search, the switcher and the list
+  - the main screen holds only progress, the up-next card, search with the switcher, and the list
   - the **⋯** menu opens with its rows
   - each item replaces the menu with its own sheet
   - **Escape** closes them
   - no "Shared" label or invitation banner appears when you're not sharing
+- **Up-next card:**
+  - it shows the right next episode, with and without skipping filler
+  - green for canon and red for filler
+  - the cards behind it
+  - **Skip** marks the episode skipped but not watched
+  - **Watched** ticks it
+  - **Undo** works for both
+  - tapping a skipped episode marks it watched
+  - tapping the card reveals the episode in the list, even past a filter or search
+- **Arcs:**
+  - 32 sections in order, with the right names, ranges and canon/filler kind, and progress per arc
+  - finished arcs fold and the current arc opens
+  - tapping a header toggles it, and the choice is remembered
+  - a search opens matching sections, and **Filler** hides canon-only arcs
 - **Categories:** only the 90 filler episodes are tagged, so a *mixed* episode counts as canon.
 - **Mark Several Episodes:**
   - marking a range, with and without filler
@@ -296,12 +324,12 @@ It checks:
 
 - **Create and join:** creating a list; joining through an invite link, and by pasting a code or the whole link into **Join with a Code**; the two devices' existing progress being merged; error messages for unknown and badly formed codes.
 - **Shared label and banner:** the **Shared** label appears on the main screen and opens Watch Together, and the invitation banner shows until you join.
-- **Live sync:** ticks and unticks going both ways, marking several episodes and **Undo** reaching the other device, and reset clearing the other device.
+- **Live sync:** ticks and unticks going both ways, skipping from the up-next card (and **Undo**) reaching the other device, marking several episodes and **Undo** reaching the other device, and reset clearing the other device.
 - **Offline:** changes made offline converging with the other device's changes after reconnecting, including a change made offline just before the app was closed.
 - **Leave:** stopping sharing, and staying left after a reload.
 - **Security rules:** listing rooms, malformed codes, unexpected fields, deletes, and other collections are all refused.
 
-The last runs passed all 123 checks in `e2e-test.js` and all 38 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 99** in light mode, and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
+The last runs passed all 144 checks in `e2e-test.js` and all 40 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 99** in light mode, and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
 
 ## Legal
 
