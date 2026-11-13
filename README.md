@@ -19,6 +19,14 @@ To keep things simple, the site sorts episodes into just two categories:
   - The main screen has your progress, the **up-next card**, search, the **All / Canon / Filler** control and the episode list grouped by arc.
   - Everything else is in the **⋯** menu at the top right: Mark Several Episodes, the Skip-Filler Guide, Watch Together, Get the App, the two settings, Reset Progress, and where the data comes from.
 - **Light and dark mode.** These follow the phone or computer's own setting automatically.
+- **Animations.** They're all CSS or small bits of JavaScript, with no libraries, and they switch off when the device's **Reduce Motion** setting is on.
+  - **Up-next card:** a "WATCHED" or "SKIPPED" stamp lands on the card, the card flies off, the cards behind step forward, and a glint sweeps across the new one. With a mouse, the card tilts toward the pointer and catches the light.
+  - **Ticking an episode:** the check draws itself and a ring bursts out. The progress bar springs forward with a sheen, and the number bumps.
+  - **Stars and hearts:** stars pop in one after another, five stars sets off a small firework, and hearts beat.
+  - **Panels:** they slide up when opened and back down when closed. The All / Canon / Filler selector has a sliding thumb.
+  - **Arcs and rows:** arc sections unfold and fold smoothly, and rows and arcs rise in as they appear.
+  - **Logo:** the leaf draws itself when the app opens. Tap it for a spin.
+  - **Elsewhere:** the Skip-Filler Guide's map fills in as a wave, and Naruto Wrapped and the arc-complete card build in piece by piece.
 - **Up-next card.** A big card shows the next episode to watch: its arc, number and title, colored **green for canon** and **red for filler**. Two more cards peek out behind it, like a deck.
   - **Watched** flips the card away to the right and brings up the next one.
   - **Skip** flips it away to the left and marks the episode as *skipped*. It won't come back, and it isn't counted as watched.
@@ -334,6 +342,10 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
   - rejecting numbers outside 1–220
   - changes surviving a reload
 - **Light and dark mode:** the page follows the device setting.
+- **Animations:**
+  - the selector's thumb follows the choice
+  - **Watched** stamps the card before it flies, and the next card comes up
+  - with Reduce Motion on, the card changes at once and nothing animates
 - **Your name:**
   - the first launch asks for it, and **Not Now** isn't asked again
   - **⋯ → Your Name** changes it
@@ -412,7 +424,7 @@ It checks:
 - **Leave:** stopping sharing, and staying left after a reload.
 - **Security rules:** listing rooms, malformed codes, unexpected fields, deletes, and other collections are all refused.
 
-The last runs passed all 193 checks in `e2e-test.js` and all 60 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 99** in light mode, and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
+The last runs passed all 202 checks in `e2e-test.js` and all 60 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 99** in light mode, and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
 
 ## Legal
 

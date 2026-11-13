@@ -86,13 +86,17 @@ const collapse = (nums) => {
   try {
     // ================= file:// =================
     {
+      // No init script here: one that touches localStorage at document start can make headless
+      // Chromium hand a reloaded file:// page an empty storage area. Use the welcome screen instead.
       const page = await browser.newPage();
-      await page.addInitScript(presetProfile);
       const errors = [];
       page.on("pageerror", (e) => errors.push(e.message));
       page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
       await page.goto("file://" + path.join(ROOT, "index.html"));
       check("file://: 220 episodes rendered", (await page.locator(".episode").count()) === 220);
+      check("file://: first launch asks for a name", await page.evaluate(() => document.getElementById("welcome-sheet").open));
+      await page.fill("#welcome-name", "Tester");
+      await page.click("#welcome-save");
       check("file://: no JS errors", errors.length === 0, errors.join(" | "));
       check("file://: no service worker registered", await page.evaluate(async () => {
         if (!navigator.serviceWorker) return true;
@@ -102,6 +106,7 @@ const collapse = (nums) => {
       check("file://: sharing explains it needs the hosted site", (await page.textContent("#sync-unavailable-text")).includes("hosted site"));
       await page.locator(`.episode >> nth=4 >> input`).check();
       await page.reload();
+      check("file://: name isn't asked again", !(await page.evaluate(() => document.getElementById("welcome-sheet").open)));
       check("file://: watched state persists", await page.locator(`#ep-5 input`).isChecked());
       await page.close();
     }
@@ -239,6 +244,7 @@ const collapse = (nums) => {
     await resetArcChoices();
     check("arcs: 32 sections in story order", (await page.locator(".arc").count()) === 32);
     check("arcs: first is Land of Waves (1–19, canon)", (await page.textContent("#arc-0 .arc-name")) === "Land of Waves" && (await page.textContent("#arc-0 .arc-meta")) === "Episodes 1–19 · Canon");
+    check("arcs: an untouched filler arc says Skip (not Done) while skipping filler", (await page.$$eval(".arc", (els) => els.filter((e) => e.querySelector(".arc-name").textContent === "Land of Tea Escort Mission").map((e) => e.querySelector(".arc-progress").textContent + (e.classList.contains("is-done") ? "!" : "")).join(""))) === "Skip");
     check("arcs: Land of Tea is a filler arc", (await page.$$eval(".arc", (els) => els.filter((e) => e.querySelector(".arc-name").textContent === "Land of Tea Escort Mission" && e.dataset.kind === "filler").length)) === 1);
     check("arcs: finished arc shows Done and is folded", (await page.textContent("#arc-0 .arc-progress")) === "Done" && !(await page.isVisible("#ep-1")));
     check("arcs: the current arc is open", await page.isVisible("#ep-27") && (await page.getAttribute("#arc-1 .arc-head", "aria-expanded")) === "true");
@@ -248,7 +254,7 @@ const collapse = (nums) => {
     await page.reload();
     check("arcs: your choice is remembered", await page.isVisible("#ep-1"));
     await page.click("#arc-0 .arc-head");
-    check("arcs: tapping again folds it", !(await page.isVisible("#ep-1")));
+    check("arcs: tapping again folds it", (await waitFor(async () => !(await page.isVisible("#ep-1")), 3000)) === true);
     await page.fill("#search", "special report");
     check("arcs: a search opens matching sections", await page.isVisible("#ep-26") && (await page.locator(".arc:not([hidden])").count()) === 1);
     await page.fill("#search", "");
@@ -399,8 +405,33 @@ const collapse = (nums) => {
     // Pace: several episodes marked one at a time → finish estimate
     check("time left: shown under the progress", (await page.textContent("#pace-text")).includes("of canon left"), await page.textContent("#pace-text"));
     check("pace: no estimate from a single episode", !(await page.textContent("#pace-text")).includes("a day"));
-    for (let i = 0; i < 2; i++) { await page.click("#deck-watch"); await page.waitForTimeout(400); }
+    for (let i = 0; i < 2; i++) { // wait for each card to fly off and the next to come up
+      const was = await page.textContent("#deck-num");
+      await page.click("#deck-watch");
+      await waitFor(async () => (await page.textContent("#deck-num")) !== was, 3000);
+    }
     check("pace: finish estimate shown", (await page.isVisible("#pace-text")) && (await page.textContent("#pace-text")).includes("a day"), await page.textContent("#pace-text"));
+
+    // Animations
+    check("animations: page marked ready for entrance animations", await page.evaluate(() => document.documentElement.classList.contains("ready")));
+    await show("filler");
+    check("animations: the selector's thumb slides to the choice", (await page.evaluate(() => getComputedStyle(document.getElementById("filters")).getPropertyValue("--i").trim())) === "2");
+    await show("all");
+    await page.evaluate(() => window.scrollTo(0, 0));
+    const beforeFly = await page.textContent("#deck-num");
+    await page.click("#deck-watch");
+    check("animations: Watched stamps the card before it flies", (await page.locator("#deck-card.fly-right .stamp-watched").count()) === 1 && (await page.textContent("#deck-num")) === beforeFly);
+    await waitFor(async () => (await page.textContent("#deck-num")) !== beforeFly, 3000);
+    check("animations: the next card comes up", (await page.textContent("#deck-num")) !== beforeFly && (await page.locator("#deck-card.fly-right").count()) === 0);
+    await page.click(".toast-action"); // undo
+    await page.click('#rate-close').catch(() => {});
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    const beforeReduced = await page.textContent("#deck-num");
+    await page.click("#deck-watch");
+    check("animations: with Reduce Motion the card changes at once", (await waitFor(async () => (await page.textContent("#deck-num")) !== beforeReduced, 350)) === true); // well under the 460 ms animation
+    check("animations: with Reduce Motion nothing animates", (await page.$eval("#deck-card", (el) => getComputedStyle(el).transitionDuration)) === "0s" || (await page.$eval("#deck-card", (el) => getComputedStyle(el).transitionProperty)) === "none");
+    await page.click(".toast-action");
+    await page.emulateMedia({ reducedMotion: "no-preference" });
 
     // Spoiler shield
     await menuSwitch("spoiler-shield");

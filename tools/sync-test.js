@@ -206,7 +206,7 @@ async function waitFor(fn, timeout = 8000) {
     check("live: progress text updated on A", (await A.page.textContent("#progress-all-text")) === live.length + " of 220 total", await A.page.textContent("#progress-all-text"));
 
     // Marking several at once (and Undo) syncs too
-    check("chip: A shows 'Shared' on the main screen", (await A.page.textContent("#sync-chip")) === "Shared" && await A.page.isVisible("#sync-chip"));
+    check("chip: A shows 'Shared' on the main screen", (await waitFor(async () => (await A.page.textContent("#sync-chip")) === "Shared", 10000)) === true && await A.page.isVisible("#sync-chip"), await A.page.textContent("#sync-chip"));
     check("chip: invite banner gone after joining", !(await B.page.isVisible("#invite-banner")));
     check("menu: Watch Together shows 'Synced'", (await waitFor(async () => (await A.page.textContent("#menu-sync-status")) === "Synced", 10000)) === true, await A.page.textContent("#menu-sync-status"));
     await closeSheets(A.page);

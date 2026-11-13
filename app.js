@@ -278,6 +278,15 @@
       b.setAttribute("aria-checked", String(on));
       b.tabIndex = on ? 0 : -1;
     });
+    syncSegment($("filters"));
+  }
+  /** Moves a segmented control's sliding thumb to the selected option. */
+  function syncSegment(el) {
+    var kids = Array.prototype.slice.call(el.children);
+    var i = kids.findIndex(function (b) { return b.getAttribute("aria-checked") === "true"; });
+    el.classList.add("slide");
+    el.style.setProperty("--n", kids.length);
+    el.style.setProperty("--i", Math.max(0, i));
   }
   function setShow(value) {
     prefs.show = value;
@@ -451,17 +460,37 @@
     var next = nextEpisode();
     return !!next && arcOf[next.number - 1] === a;
   }
-  function setArcOpen(a, open) {
+  function setArcOpen(a, open, instant) {
     prefs.arcOpen[arcKey(a)] = open;
     savePrefs();
+    var animate = !instant && !reduceMotion() && !!a.list.animate;
+    if (!open && animate && !a.list.hidden) { // fold: shrink, then hide
+      a.el.classList.remove("is-open");
+      a.head.setAttribute("aria-expanded", "false");
+      a.list.style.overflow = "hidden";
+      a.list.animate([{ height: a.list.offsetHeight + "px", opacity: 1 }, { height: "0px", opacity: 0 }],
+        { duration: 240, easing: "cubic-bezier(.4, 0, .6, 1)" }).onfinish = function () {
+        a.list.style.overflow = "";
+        applyFilters();
+      };
+      return;
+    }
+    var wasHidden = a.list.hidden;
     applyFilters();
+    if (open && animate && wasHidden && !a.list.hidden) { // unfold: grow to full height
+      a.list.style.overflow = "hidden";
+      a.list.animate([{ height: "0px", opacity: 0 }, { height: a.list.scrollHeight + "px", opacity: 1 }],
+        { duration: 320, easing: "cubic-bezier(.2, .9, .3, 1)" }).onfinish = function () { a.list.style.overflow = ""; };
+    }
   }
 
-  function pop(el) {
-    el.classList.remove("pop");
-    void el.offsetWidth; // restart the animation
-    el.classList.add("pop");
+  /** (Re)starts a CSS animation that is tied to a class. */
+  function replay(el, cls) {
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
   }
+  function pop(el) { replay(el, "pop"); }
 
   // ---------- Episode maps (one square per episode) ----------
   var mapCells = { guide: [] };
@@ -472,6 +501,7 @@
       cell.className = "cell";
       cell.dataset.type = kindOf(ep);
       cell.dataset.n = ep.number;
+      cell.style.setProperty("--d", ep.number);
       cell.title = "Ep " + ep.number + " · " + ep.title + " (" + TYPE_BY_ID[kindOf(ep)].long + ")";
       frag.appendChild(cell);
       cells.push(cell);
@@ -549,8 +579,10 @@
     arcs.forEach(function (a) {
       var w = a.numbers.filter(function (n) { return watched.has(n); }).length;
       var done = arcDone(a);
-      a.progress.textContent = done ? "Done" : w + "/" + a.numbers.length;
-      a.el.classList.toggle("is-done", done);
+      // A filler arc you're skipping (nothing watched, nothing to watch) says "Skip", not "Done"
+      var skipIt = done && !w && !a.numbers.every(function (n) { return skipped.has(n); });
+      a.progress.textContent = skipIt ? "Skip" : done ? "Done" : w + "/" + a.numbers.length;
+      a.el.classList.toggle("is-done", done && !skipIt);
       var rated = a.numbers.filter(function (n) { return ratings[n]; });
       var avg = rated.length ? rated.reduce(function (sum, n) { return sum + ratings[n]; }, 0) / rated.length : 0;
       a.meta.textContent = a.metaBase + (avg ? " · ★ " + avg.toFixed(1) : "");
@@ -575,6 +607,10 @@
 
   function setBar(id, value, max) {
     var bar = $(id);
+    if (bar.getAttribute("aria-valuenow") !== String(value) && rows.length === TOTAL && document.documentElement.classList.contains("ready")) {
+      replay(bar, "bump");
+      replay($("progress-canon-text"), "bump-text");
+    }
     bar.style.width = (max ? (value / max) * 100 : 0) + "%";
     bar.setAttribute("aria-valuenow", String(value));
     bar.setAttribute("aria-valuemax", String(max));
@@ -655,7 +691,8 @@
     var n = ep.number, before = stateOf(n);
     var card = $("deck-card");
     deckBusy = true;
-    card.classList.add(state === "watched" ? "fly-right" : "fly-left");
+    resetTilt();
+    card.classList.add(state === "watched" ? "fly-right" : "fly-left"); // the stamp lands, then it flies
     setTimeout(function () {
       withCelebration(function () {
         setState(n, state);
@@ -670,8 +707,9 @@
       updateProgress();
       applyFilters();
       if (!reduceMotion()) {
-        card.classList.add("enter");
-        setTimeout(function () { card.classList.remove("enter"); }, 320);
+        replay(card, "enter");
+        replay($("deck"), "advance");
+        setTimeout(function () { card.classList.remove("enter"); $("deck").classList.remove("advance"); }, 850);
       }
       toast((state === "watched" ? "Watched" : "Skipped") + " episode " + n, "Undo", function () {
         setState(n, before);
@@ -680,9 +718,48 @@
         updateProgress();
         applyFilters();
       });
-    }, reduceMotion() ? 0 : 260);
+    }, reduceMotion() ? 0 : 460);
+  }
+
+  // With a mouse, the card tilts toward the pointer
+  function resetTilt() {
+    var card = $("deck-card");
+    card.classList.remove("tilting");
+    ["--rx", "--ry", "--gx", "--gy"].forEach(function (v) { card.style.removeProperty(v); });
+  }
+  function initTilt() {
+    var card = $("deck-card");
+    if (!window.matchMedia || !window.matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+    card.addEventListener("pointermove", function (e) {
+      if (deckBusy || reduceMotion()) return;
+      var r = card.getBoundingClientRect();
+      var x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+      var y = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+      card.classList.add("tilting");
+      card.style.setProperty("--ry", ((x - 0.5) * 7).toFixed(2) + "deg");
+      card.style.setProperty("--rx", ((0.5 - y) * 6).toFixed(2) + "deg");
+      card.style.setProperty("--gx", (x * 100).toFixed(1) + "%");
+      card.style.setProperty("--gy", (y * 100).toFixed(1) + "%");
+    });
+    card.addEventListener("pointerleave", resetTilt);
+  }
+
+  // The leaf logo draws itself; tap it for a spin
+  function drawLeaf(mark, duration) {
+    var path = mark && mark.querySelector("path");
+    if (!path || !path.animate || !path.getTotalLength || reduceMotion()) return;
+    var len = path.getTotalLength();
+    path.style.strokeDasharray = len;
+    path.animate([{ strokeDashoffset: len }, { strokeDashoffset: 0 }],
+      { duration: duration || 1300, easing: "cubic-bezier(.5, 0, .2, 1)" }).onfinish = function () { path.style.strokeDasharray = ""; };
+  }
+  function initLogo() {
+    var mark = document.querySelector(".top .app-mark");
+    drawLeaf(mark);
+    mark.addEventListener("click", function () { replay(mark, "spin"); });
   }
   function initDeck() {
+    initTilt();
     $("deck-watch").addEventListener("click", function () { deckAct("watched"); });
     $("deck-skip").addEventListener("click", function () { deckAct("skipped"); });
     $("deck-find").addEventListener("click", function () {
@@ -697,7 +774,7 @@
   function jumpTo(ep) {
     var i = ep.number - 1;
     closeAllSheets();
-    if (!isArcOpen(arcOf[i])) setArcOpen(arcOf[i], true);
+    if (!isArcOpen(arcOf[i])) setArcOpen(arcOf[i], true, true);
     // Make sure the target is visible: clear search / enable its type if needed.
     if (!isVisible(i)) {
       if (prefs.hideWatched && watched.has(ep.number)) {
@@ -933,7 +1010,9 @@
     }
     el.addEventListener("click", function (e) {
       var b = e.target.closest(".star");
-      if (b) onPick(Number(b.dataset.v));
+      if (!b) return;
+      onPick(Number(b.dataset.v));
+      if (b.dataset.v === "5" && b.classList.contains("on")) replay(el, "burst"); else el.classList.remove("burst");
     });
   }
   function renderStars(el, value) {
@@ -1033,6 +1112,7 @@
     Array.prototype.forEach.call($("ep-sheet-state").children, function (b) {
       b.setAttribute("aria-checked", String(b.dataset.state === state));
     });
+    syncSegment($("ep-sheet-state"));
     renderStars($("ep-sheet-stars"), ratings[n] || 0);
     $("ep-sheet-fav").setAttribute("aria-pressed", String(favorites.has(n)));
     $("ep-sheet-fav-label").textContent = favorites.has(n) ? "Favorite" : "Add to Favorites";
@@ -1146,6 +1226,7 @@
     $("welcome-skip").textContent = editing ? "Cancel" : "Not Now";
     $("welcome-name").value = profile.name || "";
     openDialog($("welcome-sheet"), $("welcome-name"));
+    drawLeaf($("welcome-sheet").querySelector(".welcome-mark"), 1600);
   }
   /** Runs fn now, or once the welcome screen has been answered. */
   function afterWelcome(fn) {
@@ -1830,6 +1911,8 @@
 
     if (location.protocol === "file:") $("file-note").hidden = false;
     document.documentElement.classList.remove("js-loading"); // reveal the built page
+    document.documentElement.classList.add("ready");         // entrance animations
+    initLogo();
     registerServiceWorker();
   }
 
