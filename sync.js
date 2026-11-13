@@ -2,12 +2,14 @@
  * Loaded on demand by app.js (dynamic import) only when a shared list is in use.
  *
  * Data: one document per shared list, rooms/{ROOMCODE}:
- *   { eps: { "12": { w: true, s: false, t: 1731400000000 }, ... },
- *     members: { "<memberId>": { name, r: { "12": 4 }, f: { "12": true }, last: { n: 12, at: <ms> } } },
+ *   { members: { "<memberId>": {
+ *       name, r: { "12": 4 }, f: { "12": true }, last: { n: 12, at: <ms> },
+ *       p: { "12": { w: true, s: false, t: 1731400000000 }, ... } } },
+ *     eps: { ... },   // older single shared list, kept only to carry it over
  *     updatedAt: <server time> }
- * eps is the shared watched list: w = watched, s = skipped, t = when it last changed (ms).
+ * p is each person's own progress: w = watched, s = skipped, t = when it last changed (ms).
  * Each episode resolves last-change-wins, so offline devices merge cleanly.
- * members holds each person's own name, star ratings (r), favorites (f) and latest episode.
+ * r, f and last are that person's star ratings, favorites and latest episode.
  */
 const SDK = "https://www.gstatic.com/firebasejs/12.19.0/";
 
@@ -41,27 +43,33 @@ function withTimeout(promise, ms, code) {
 
 /**
  * Connects to a shared list and keeps it in sync.
+ * Each person's progress lives in members.{id}.p ({ n: {w, s, t} }), so everyone keeps their
+ * own watched list and sees the others'. "eps" is the older, single shared list: it's only read
+ * to carry an existing list over the first time someone connects with this version.
  * @param {object} opts
  * @param {object} opts.config   Firebase web config
  * @param {string} opts.roomId   16-character room code (no dashes)
+ * @param {string} opts.memberId this device's person id
  * @param {"create"|"join"|"resume"} opts.mode
  * @param {object} opts.api      callbacks into app.js:
- *   allEntries() -> { n: {w,t} } for every episode with a value
- *   applyRemote(eps) -> { n: {w,t} } entries where this device is newer (to upload)
- *   applyMembers(members)    everyone's names, ratings, favorites and latest episode
+ *   allEntries() -> { n: {w,s,t} } for every episode with a value
+ *   applyRemote(mine, legacyEps) -> entries where this device is newer (to upload).
+ *                            mine is this person's saved progress, or null the first time.
+ *   applyMembers(members)    everyone's names, ratings, favorites, latest episode and progress
  *   memberError(err)         this person's details couldn't be saved (e.g. old security rules)
  *   status(state, message)   state: connecting | synced | saving | offline | error
- * @returns {Promise<{ push(entries): void, pushMember(id, data): void, stop(): void }>}
+ * @returns {Promise<{ push(entries), pushFor(id, entries), pushMember(id, data), stop() }>}
  */
-export async function connect({ config, roomId, mode, api }) {
+export async function connect({ config, roomId, memberId, mode, api }) {
   api.status("connecting");
   const database = await getDb(config);
   const ref = fs.doc(database, "rooms", roomId);
+  const validId = (id) => /^[a-z0-9]{6,40}$/.test(id);
 
   if (mode === "create") {
     if (!navigator.onLine) throw Object.assign(new Error("offline"), { code: "offline" });
     await withTimeout(
-      fs.setDoc(ref, { eps: api.allEntries(), updatedAt: fs.serverTimestamp() }),
+      fs.setDoc(ref, { eps: {}, members: { [memberId]: { p: api.allEntries() } }, updatedAt: fs.serverTimestamp() }),
       15000, "timeout"
     );
   } else if (mode === "join") {
@@ -70,7 +78,7 @@ export async function connect({ config, roomId, mode, api }) {
     if (!snap.exists()) throw Object.assign(new Error("not-found"), { code: "not-found" });
   }
 
-  // Batch quick successive changes into one write
+  // Batch quick successive changes into one write: { personId: { n: entry } }
   let pending = {};
   let flushTimer = null;
   let stopped = false;
@@ -78,31 +86,43 @@ export async function connect({ config, roomId, mode, api }) {
   function flush() {
     flushTimer = null;
     if (stopped) return;
-    const eps = pending;
+    const batch = pending;
     pending = {};
-    if (!Object.keys(eps).length) return;
-    fs.setDoc(ref, { eps, updatedAt: fs.serverTimestamp() }, { merge: true })
-      .catch((err) => api.status("error", describeError(err)));
+    const ids = Object.keys(batch);
+    if (!ids.length) return;
+    const members = {};
+    ids.forEach((id) => { members[id] = { p: batch[id] }; });
+    // merge: only these episodes of these people change
+    fs.setDoc(ref, { members, updatedAt: fs.serverTimestamp() }, { merge: true })
+      .catch((err) => {
+        if (api.memberError && String(err && err.code).indexOf("permission-denied") !== -1) api.memberError(err);
+        else api.status("error", describeError(err));
+      });
   }
 
-  // This person's own details: replaced as a whole, separately from the watched list
+  /** Saves progress entries for a person (yourself, or someone you watched with). */
+  function pushFor(id, entries) {
+    if (stopped || !entries || !validId(id)) return;
+    const keys = Object.keys(entries);
+    if (!keys.length) return;
+    pending[id] = pending[id] || {};
+    keys.forEach((k) => { pending[id][k] = entries[k]; });
+    if (!flushTimer) flushTimer = setTimeout(flush, 250);
+  }
+  function push(entries) { pushFor(memberId, entries); }
+
+  // This person's own details (name, ratings, favorites, latest episode): each part is replaced
+  // as a whole, without touching their progress (p)
   let memberTimer = null;
   function pushMember(id, data) {
-    if (stopped || !/^[a-z0-9]{6,40}$/.test(id)) return;
+    if (stopped || !validId(id)) return;
     clearTimeout(memberTimer);
     memberTimer = setTimeout(() => {
       if (stopped) return;
-      fs.setDoc(ref, { members: { [id]: data }, updatedAt: fs.serverTimestamp() }, { mergeFields: ["members." + id, "updatedAt"] })
+      const fields = Object.keys(data).filter((k) => k !== "p").map((k) => "members." + id + "." + k);
+      fs.setDoc(ref, { members: { [id]: data }, updatedAt: fs.serverTimestamp() }, { mergeFields: fields.concat("updatedAt") })
         .catch((err) => { if (api.memberError) api.memberError(err); });
     }, 400);
-  }
-
-  function push(entries) {
-    if (stopped || !entries) return;
-    const keys = Object.keys(entries);
-    if (!keys.length) return;
-    keys.forEach((k) => { pending[k] = entries[k]; });
-    if (!flushTimer) flushTimer = setTimeout(flush, 250);
   }
 
   const unsubscribe = fs.onSnapshot(ref, { includeMetadataChanges: true }, (snap) => {
@@ -113,8 +133,10 @@ export async function connect({ config, roomId, mode, api }) {
       else api.status("offline");
       return;
     }
-    push(api.applyRemote(snap.get("eps") || {}));
-    if (api.applyMembers) api.applyMembers(snap.get("members") || {});
+    const members = snap.get("members") || {};
+    const mine = members[memberId] && members[memberId].p;
+    if (api.applyMembers) api.applyMembers(members); // first, so the others are known
+    push(api.applyRemote(mine && typeof mine === "object" ? mine : null, snap.get("eps") || {}));
     api.status(meta.hasPendingWrites || flushTimer ? "saving" : meta.fromCache ? "offline" : "synced");
   }, (err) => {
     api.status("error", describeError(err));
@@ -122,6 +144,7 @@ export async function connect({ config, roomId, mode, api }) {
 
   return {
     push,
+    pushFor,
     pushMember,
     stop() {
       stopped = true;

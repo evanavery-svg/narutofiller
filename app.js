@@ -54,6 +54,8 @@
     show: "all",          // "all" | "canon" | "filler"
     hideWatched: false,
     skipFillerNext: true,
+    together: false,      // "We watch together": your marks count for everyone on the shared list
+    shield: false,        // spoiler shield: blur titles of episodes you haven't watched
     arcOpen: {}           // arc sections you opened/closed yourself ("name@firstEpisode": true/false)
   };
   var storedPrefs = load(STORAGE.prefs, {}) || {};
@@ -145,6 +147,10 @@
     if (!remaining) return null;
     return { perDay: perDay, remaining: remaining, finish: new Date(now + Math.ceil(remaining / perDay) * DAY) };
   }
+  function formatHM(minutes) {
+    var h = Math.floor(minutes / 60), m = minutes % 60;
+    return h ? h + "h" + (m ? " " + m + "m" : "") : m + "m";
+  }
   function formatDate(d) {
     var opts = { month: "short", day: "numeric" };
     if (d.getFullYear() !== new Date().getFullYear()) opts.year = "numeric";
@@ -187,7 +193,10 @@
       entries[n] = entryOf(n, t);
     });
     saveWatched();
-    if (sync.controller) sync.controller.push(entries);
+    if (sync.controller) {
+      sync.controller.push(entries);
+      if (prefs.together) markForOthers(entries);
+    }
   }
 
   // ---------- Helpers ----------
@@ -340,10 +349,14 @@
 
     var meta = document.createElement("span");
     meta.className = "ep-meta";
+    var who = document.createElement("span");
+    who.className = "ep-who";
+    who.hidden = true;
 
     row.appendChild(check);
     row.appendChild(num);
     row.appendChild(main);
+    row.appendChild(who);
     row.appendChild(meta);
     li.appendChild(row);
 
@@ -355,7 +368,7 @@
     info.innerHTML = INFO_SVG;
     li.appendChild(info);
 
-    rows.push({ li: li, input: input, meta: meta });
+    rows.push({ li: li, input: input, meta: meta, who: who });
     return li;
   }
 
@@ -416,9 +429,12 @@
       var input = e.target;
       if (!input.matches('input[type="checkbox"]')) return;
       var n = Number(input.dataset.number);
-      setState(n, input.checked ? "watched" : "none");
-      recordChanges([n]);
-      if (input.checked) noteWatched(n);
+      withCelebration(function () {
+        setState(n, input.checked ? "watched" : "none");
+        recordChanges([n]);
+        if (input.checked) noteWatched(n);
+        updateArcProgress();
+      });
       syncRow(n - 1);
       if (input.checked) pop(input.nextElementSibling);
       updateProgress();
@@ -514,10 +530,25 @@
     $("empty-state").hidden = shown !== 0;
   }
 
+  /** Finished: everything watched or skipped (filler doesn't count while skipping filler). */
+  function arcDone(a) {
+    return a.numbers.every(function (n) {
+      return watched.has(n) || skipped.has(n) || (prefs.skipFillerNext && kindOf(EPISODES[n - 1]) === "filler");
+    });
+  }
+  function doneArcs() { return arcs.filter(arcDone); }
+  /** Runs a single-episode change; celebrates any arc it finishes. */
+  function withCelebration(fn) {
+    var before = doneArcs();
+    fn();
+    var fresh = doneArcs().filter(function (a) { return before.indexOf(a) === -1 && a.numbers.some(function (n) { return watched.has(n); }); });
+    if (fresh.length) celebrate(fresh[fresh.length - 1]);
+  }
+
   function updateArcProgress() {
     arcs.forEach(function (a) {
       var w = a.numbers.filter(function (n) { return watched.has(n); }).length;
-      var done = a.numbers.every(function (n) { return watched.has(n) || skipped.has(n); });
+      var done = arcDone(a);
       a.progress.textContent = done ? "Done" : w + "/" + a.numbers.length;
       a.el.classList.toggle("is-done", done);
       var rated = a.numbers.filter(function (n) { return ratings[n]; });
@@ -558,13 +589,17 @@
     $("progress-all-text").textContent = total + " of " + TOTAL + " total" +
       (skipped.size ? " · " + skipped.size + " skipped" : "");
     setBar("progress-canon-bar", canon, canonEpisodes.length);
+    // Time left, and (with a few episodes marked one at a time) your pace and finish date
+    var left = upcoming(TOTAL).length;
     var pace = paceInfo();
-    $("pace-text").hidden = !pace;
+    var what = prefs.skipFillerNext ? "canon" : "the series";
+    var parts = left ? [formatHM(left * MINUTES_PER_EPISODE) + " of " + (prefs.skipFillerNext ? "canon" : "episodes") + " left"] : [];
     if (pace) {
       var per = pace.perDay >= 1 ? String(Math.round(pace.perDay)) : pace.perDay.toFixed(1);
-      $("pace-text").textContent = "About " + per + " a day · you'll finish " +
-        (prefs.skipFillerNext ? "canon" : "the series") + " around " + formatDate(pace.finish);
+      parts.push("about " + per + " a day · done with " + what + " around " + formatDate(pace.finish));
     }
+    $("pace-text").hidden = !parts.length;
+    $("pace-text").textContent = parts.join(" · ");
     updateArcProgress();
     renderDeck();
     if (rows.length === TOTAL && arcs[0].el) applyFilters(); // the current arc may have changed
@@ -572,13 +607,14 @@
     var n = watched.size + skipped.size;
     $("reset-question").textContent = n
       ? "Clear all " + n + " watched or skipped episode" + (n === 1 ? "" : "s") +
-        (sync.roomId ? " for everyone on the shared list" : "") + "? This can't be undone."
+        (sync.roomId && prefs.together ? " for everyone on the shared list" : "") + "? This can't be undone."
       : "Nothing to reset yet.";
     $("reset-yes").hidden = n === 0;
   }
 
   // ---------- Up-next deck (one card at a time) ----------
   var deckBusy = false;
+  var deck = { revealed: {} }; // titles revealed this session (spoiler shield)
   function reduceMotion() {
     return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   }
@@ -603,7 +639,12 @@
     $("deck-kind").textContent = kind === "filler" ? "Filler" : "Canon";
     $("deck-num").textContent = "Episode " + ep.number;
     $("deck-title").textContent = ep.title;
-    $("deck-hint").textContent = kind === "filler" ? "Anime-only. Safe to skip." : "Part of the manga's story.";
+    var hide = prefs.shield && !deck.revealed[ep.number];
+    $("deck-card").classList.toggle("is-hidden-title", hide);
+    $("deck-label").textContent = hide ? "Up next · tap to reveal the title" : "Up next";
+    var already = sync.roomId ? othersWho(ep.number) : [];
+    $("deck-hint").textContent = (kind === "filler" ? "Anime-only. Safe to skip." : "Part of the manga's story.") +
+      (already.length ? " " + nameList(already) + " already watched it." : "");
     $("deck-find").setAttribute("aria-label", "Show episode " + ep.number + " in the list");
   }
 
@@ -616,9 +657,12 @@
     deckBusy = true;
     card.classList.add(state === "watched" ? "fly-right" : "fly-left");
     setTimeout(function () {
-      setState(n, state);
-      recordChanges([n]);
-      if (state === "watched") noteWatched(n);
+      withCelebration(function () {
+        setState(n, state);
+        recordChanges([n]);
+        if (state === "watched") noteWatched(n);
+        updateArcProgress();
+      });
       syncRow(n - 1);
       card.classList.remove("fly-right", "fly-left");
       showRatePrompt(state === "watched" ? n : 0);
@@ -641,7 +685,12 @@
   function initDeck() {
     $("deck-watch").addEventListener("click", function () { deckAct("watched"); });
     $("deck-skip").addEventListener("click", function () { deckAct("skipped"); });
-    $("deck-find").addEventListener("click", function () { var ep = nextEpisode(); if (ep) jumpTo(ep); });
+    $("deck-find").addEventListener("click", function () {
+      var ep = nextEpisode();
+      if (!ep) return;
+      if (prefs.shield && !deck.revealed[ep.number]) { deck.revealed[ep.number] = true; renderDeck(); return; } // first tap reveals
+      jumpTo(ep);
+    });
   }
 
   /** Scrolls the list to an episode, adjusting filters/search if they hide it. */
@@ -689,6 +738,184 @@
     showResetConfirm(false, true);
     closeDialog($("menu-sheet"));
     toast("Progress reset");
+  }
+
+  // ---------- Spoiler shield ----------
+  function applyShield() {
+    document.body.classList.toggle("shield", !!prefs.shield);
+    mapCells.guide.forEach(function (cell, i) { // map tooltips
+      var ep = EPISODES[i];
+      cell.title = "Ep " + ep.number + (prefs.shield && !watched.has(ep.number) ? "" : " · " + ep.title);
+    });
+    renderDeck();
+  }
+
+  // ---------- Arc complete! ----------
+  function celebrate(a) {
+    if (window.NF_NO_CELEBRATION) return; // automated tests that tick through whole arcs
+    var rated = a.numbers.filter(function (n) { return ratings[n]; });
+    var avg = rated.length ? rated.reduce(function (sum, n) { return sum + ratings[n]; }, 0) / rated.length : 0;
+    var idx = arcs.indexOf(a), next = arcs[idx + 1];
+    $("celebrate-title").textContent = a.name + " complete!";
+    var w = a.numbers.filter(function (n) { return watched.has(n); }).length;
+    $("celebrate-text").textContent = w + " episode" + (w === 1 ? "" : "s") + " watched" +
+      (avg ? " · your average ★ " + avg.toFixed(1) : "") + (next ? ". Next up: " + next.name + "." : ". That's the whole series!");
+    openDialog($("celebrate-sheet"), $("celebrate-ok"));
+    confetti($("confetti"));
+  }
+  function confetti(canvas) {
+    if (reduceMotion() || !canvas.getContext) return;
+    var ctx = canvas.getContext("2d");
+    var w = canvas.width = canvas.clientWidth * (window.devicePixelRatio || 1);
+    var h = canvas.height = canvas.clientHeight * (window.devicePixelRatio || 1);
+    var colors = ["#f68b22", "#ffb800", "#34c759", "#ff3b30", "#007aff", "#ffffff"];
+    var bits = [];
+    for (var i = 0; i < 140; i++) {
+      bits.push({ x: w / 2 + (Math.random() - 0.5) * w * 0.3, y: h * 0.35, vx: (Math.random() - 0.5) * w * 0.02,
+        vy: -Math.random() * h * 0.02 - h * 0.005, s: (4 + Math.random() * 6) * (window.devicePixelRatio || 1),
+        r: Math.random() * 6, vr: (Math.random() - 0.5) * 0.3, c: colors[i % colors.length] });
+    }
+    var start = performance.now();
+    (function frame(now) {
+      var t = now - start;
+      ctx.clearRect(0, 0, w, h);
+      bits.forEach(function (b) {
+        b.vy += h * 0.0006; b.x += b.vx; b.y += b.vy; b.r += b.vr;
+        ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.r);
+        ctx.globalAlpha = Math.max(0, 1 - t / 3200);
+        ctx.fillStyle = b.c; ctx.fillRect(-b.s / 2, -b.s / 4, b.s, b.s / 2);
+        ctx.restore();
+      });
+      if (t < 3200 && $("celebrate-sheet").open) requestAnimationFrame(frame); else ctx.clearRect(0, 0, w, h);
+    })(start);
+  }
+
+  // ---------- Naruto Wrapped ----------
+  function wrappedData() {
+    var list = sorted(watched);
+    var times = list.map(function (n) { return changedAt[n]; }).filter(Boolean);
+    var first = times.length ? Math.min.apply(null, times) : 0;
+    var days = first ? Math.max(1, Math.ceil((Date.now() - first) / 864e5)) : 0;
+    var top = Object.keys(ratings).map(Number).sort(function (a, b) { return ratings[b] - ratings[a] || a - b; }).slice(0, 3);
+    // favorite arc: best average (2+ ratings), else the one you watched most of
+    var bestArc = null, bestScore = -1;
+    arcs.forEach(function (a) {
+      var r = a.numbers.filter(function (n) { return ratings[n]; });
+      var score = r.length >= 2 ? 10 + r.reduce(function (sum, n) { return sum + ratings[n]; }, 0) / r.length
+        : a.numbers.filter(function (n) { return watched.has(n); }).length / 1000;
+      if (score > bestScore && a.numbers.some(function (n) { return watched.has(n); })) { bestScore = score; bestArc = a; }
+    });
+    var people = partners().map(function (m) {
+      var both = Object.keys(ratings).map(Number).filter(function (n) { return m.r[n]; });
+      var agree = both.filter(function (n) { return m.r[n] === ratings[n]; }).length;
+      var diff = both.slice().sort(function (a, b) { return Math.abs(m.r[b] - ratings[b]) - Math.abs(m.r[a] - ratings[a]); })[0];
+      return { m: m, both: both.length, agree: agree, diff: diff && Math.abs(m.r[diff] - ratings[diff]) >= 2 ? diff : 0 };
+    });
+    return { count: list.length, hours: Math.round(list.length * MINUTES_PER_EPISODE / 60), days: days,
+      top: top, arc: bestArc, favs: favorites.size, skipped: skipped.size, people: people };
+  }
+  function renderWrapped() {
+    var d = wrappedData();
+    $("wrapped-who").textContent = profile.name ? profile.name + "'s Naruto" : "Your Naruto";
+    $("wrapped-count").textContent = d.count;
+    $("wrapped-count").nextElementSibling.textContent = d.count === 1 ? "episode" : "episodes";
+    $("wrapped-hours").nextElementSibling.textContent = d.hours === 1 ? "hour" : "hours";
+    $("wrapped-hours").textContent = d.hours;
+    $("wrapped-days").textContent = d.days;
+    $("wrapped-days-label").textContent = d.days === 1 ? "day" : "days";
+    var box = $("wrapped-details");
+    box.textContent = "";
+    function line(label, value) {
+      var p = document.createElement("p");
+      p.className = "wrapped-line";
+      var l = document.createElement("span"); l.className = "wrapped-label"; l.textContent = label;
+      var v = document.createElement("span"); v.className = "wrapped-value"; v.textContent = value;
+      p.appendChild(l); p.appendChild(v); box.appendChild(p);
+    }
+    if (d.top.length) d.top.forEach(function (n, i) {
+      line(i === 0 ? "Your top episodes" : "", "★" + ratings[n] + "  Ep " + n + " · " + EPISODES[n - 1].title);
+    });
+    if (d.arc) line("Favorite arc", d.arc.name);
+    if (d.favs) line("Favorites", String(d.favs));
+    if (d.skipped) line("Episodes skipped", String(d.skipped));
+    d.people.forEach(function (p) {
+      if (!p.both) return;
+      line("You & " + p.m.name, "agree on " + p.agree + " of " + p.both + " shared ratings");
+      if (p.diff) line("Biggest debate", "Ep " + p.diff + ": you ★" + ratings[p.diff] + ", " + p.m.name + " ★" + p.m.r[p.diff]);
+    });
+    if (!d.count) line("", "Watch a few episodes and come back!");
+  }
+  function shareWrapped() {
+    var d = wrappedData();
+    var text = (profile.name ? profile.name + "'s" : "My") + " Naruto so far: " + d.count + " episodes, about " + d.hours + " hours" +
+      (d.days ? " in " + d.days + " day" + (d.days === 1 ? "" : "s") : "") +
+      (d.top.length ? ". Top episode: Ep " + d.top[0] + " (★" + ratings[d.top[0]] + ")" : "") +
+      (d.arc ? ". Favorite arc: " + d.arc.name : "") + ".";
+    if (navigator.share) navigator.share({ title: "My Naruto Wrapped", text: text }).catch(function () {});
+    else if (navigator.clipboard) navigator.clipboard.writeText(text).then(function () { toast("Copied to the clipboard"); });
+  }
+
+  // ---------- Backup ----------
+  function exportBackup() {
+    var data = {
+      app: "naruto-filler-guide", backup: 1, exported: new Date().toISOString(), name: profile.name || "",
+      watched: sorted(watched), skipped: sorted(skipped), changedAt: changedAt, ratings: ratings, favorites: sorted(favorites)
+    };
+    var file = "naruto-filler-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+    var blob = new Blob([JSON.stringify(data, null, 1)], { type: "application/json" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = file;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    toast("Backup saved: " + file);
+  }
+  var pendingRestore = null;
+  function readBackup(file) {
+    var reader = new FileReader();
+    reader.onload = function () {
+      var d;
+      try { d = JSON.parse(reader.result); } catch (e) { d = null; }
+      var nums = function (a) { return Array.isArray(a) ? a.filter(function (n) { return Number.isInteger(n) && n >= 1 && n <= TOTAL; }) : null; };
+      if (!d || d.app !== "naruto-filler-guide" || !nums(d.watched)) { toast("That file isn't a Naruto Filler Guide backup"); return; }
+      pendingRestore = {
+        watched: nums(d.watched), skipped: nums(d.skipped) || [], favorites: nums(d.favorites) || [],
+        ratings: d.ratings && typeof d.ratings === "object" ? d.ratings : {},
+        name: typeof d.name === "string" ? d.name.slice(0, 30) : "", exported: d.exported
+      };
+      var when = Date.parse(d.exported);
+      $("restore-text").textContent = "From " + (when ? formatDate(new Date(when)) : "an unknown date") + ": " +
+        pendingRestore.watched.length + " watched, " + pendingRestore.skipped.length + " skipped, " +
+        Object.keys(pendingRestore.ratings).length + " ratings, " + pendingRestore.favorites.length + " favorites. " +
+        "This replaces what's on this device" + (sync.roomId ? " (and your progress on the shared list)" : "") + ".";
+      openDialog($("restore-sheet"), $("restore-yes"));
+    };
+    reader.readAsText(file);
+  }
+  function applyRestore() {
+    var r = pendingRestore;
+    if (!r) return;
+    var changed = [];
+    for (var n = 1; n <= TOTAL; n++) {
+      var st = r.watched.indexOf(n) !== -1 ? "watched" : r.skipped.indexOf(n) !== -1 ? "skipped" : "none";
+      if (stateOf(n) !== st) { setState(n, st); changed.push(n); }
+    }
+    if (changed.length) recordChanges(changed);
+    ratings = {};
+    Object.keys(r.ratings).forEach(function (k) {
+      var n = Number(k), v = r.ratings[k];
+      if (n >= 1 && n <= TOTAL && Number.isInteger(v) && v >= 1 && v <= 5) ratings[n] = v;
+    });
+    favorites = new Set(r.favorites);
+    if (!profile.name && r.name) { profile.name = r.name; saveProfile(); renderName(); }
+    savePersonal();
+    for (var i = 0; i < TOTAL; i++) syncRow(i);
+    updateProgress();
+    applyFilters();
+    pendingRestore = null;
+    closeDialog($("restore-sheet"));
+    toast("Backup restored");
   }
 
   // ---------- Stars ----------
@@ -745,6 +972,16 @@
     $("rate-text").textContent = "Rate Ep " + n;
     renderStars($("rate-stars"), ratings[n] || 0);
     $("rate-fav").setAttribute("aria-pressed", String(favorites.has(n)));
+    // Watched together? One tap marks it for the others too
+    var others = sync.roomId && !prefs.together ? partners() : [];
+    var missing = others.filter(function (m) { return !(m.p[n] && m.p[n].state === "watched"); });
+    var too = $("rate-too");
+    too.hidden = !others.length;
+    if (others.length) {
+      too.disabled = !missing.length;
+      too.textContent = missing.length ? "✓ " + (others.length > 1 ? "Everyone" : others[0].name) + " watched it too"
+        : (others.length > 1 ? "Everyone" : others[0].name) + " has it too";
+    }
   }
   function initRatePrompt() {
     buildStars($("rate-stars"), "Rate this episode", function (v) {
@@ -756,12 +993,23 @@
     });
     $("rate-fav").addEventListener("click", function () { if (ratePrompt.n) toggleFavorite(ratePrompt.n); });
     $("rate-close").addEventListener("click", function () { showRatePrompt(0); });
+    $("rate-too").addEventListener("click", function () {
+      var n = ratePrompt.n;
+      if (!n) return;
+      var entries = {};
+      entries[n] = { w: true, s: false, t: stamp() };
+      markForOthers(entries);
+      renderRatePrompt();
+      clearTimeout(ratePrompt.timer);
+      ratePrompt.timer = setTimeout(function () { showRatePrompt(0); }, 8000);
+    });
   }
 
   // ---------- Episode details ----------
   var epSheet = { n: 0 };
   function openEpSheet(n) {
     epSheet.n = n;
+    epSheet.revealed = false;
     renderEpSheet();
     openDialog($("ep-sheet"));
   }
@@ -773,6 +1021,9 @@
     $("ep-sheet-kind").textContent = kind === "filler" ? "Filler" : "Canon";
     $("ep-sheet-kind").dataset.kind = kind;
     $("ep-sheet-name").textContent = ep.title;
+    var hideTitle = prefs.shield && !watched.has(n) && !epSheet.revealed;
+    $("ep-sheet-name").classList.toggle("is-hidden-title", hideTitle);
+    $("ep-sheet-reveal").hidden = !hideTitle;
     $("ep-sheet-arc").textContent = ep.arc;
     $("ep-sheet-chapters").textContent = ep.chapters ? (ep.chapters.indexOf(",") === -1 ? "Chapter " : "Chapters ") + ep.chapters : "None (anime-only)";
     var when = watched.has(n) && changedAt[n];
@@ -788,19 +1039,39 @@
 
     var box = $("ep-sheet-partners");
     box.textContent = "";
-    partners().forEach(function (m) {
-      if (!m.r[n] && !m.f[n]) return;
+    if (sync.roomId) partners().forEach(function (m) {
+      var st = m.p[n] ? m.p[n].state : "none";
       var row = document.createElement("div");
-      row.className = "row";
+      row.className = "row person-row";
+      var text = document.createElement("span");
+      text.className = "person-text";
       var name = document.createElement("span");
-      name.className = "row-label";
+      name.className = "person-name";
       name.textContent = m.name;
-      var val = document.createElement("span");
-      val.className = "row-value partner-rating";
-      val.textContent = (m.r[n] ? starText(m.r[n]) : "") + (m.f[n] ? "  ♥" : "");
-      val.setAttribute("aria-label", (m.r[n] ? m.r[n] + " stars" : "No rating") + (m.f[n] ? ", favorite" : ""));
-      row.appendChild(name);
-      row.appendChild(val);
+      var sub = document.createElement("span");
+      sub.className = "person-state";
+      sub.textContent = st === "watched" ? "Watched " + formatDate(new Date(m.p[n].t)) : st === "skipped" ? "Skipped" : "Not watched yet";
+      text.appendChild(name);
+      text.appendChild(sub);
+      row.appendChild(text);
+      if (m.r[n] || m.f[n]) {
+        var val = document.createElement("span");
+        val.className = "partner-rating";
+        val.textContent = (m.r[n] ? starText(m.r[n]) : "") + (m.f[n] ? "  ♥" : "");
+        val.setAttribute("aria-label", (m.r[n] ? m.r[n] + " stars" : "No rating") + (m.f[n] ? ", favorite" : ""));
+        row.appendChild(val);
+      }
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "link-button person-toggle";
+      btn.textContent = st === "watched" ? "Unmark" : "Mark watched";
+      btn.setAttribute("aria-label", (st === "watched" ? "Unmark episode " + n + " for " : "Mark episode " + n + " watched for ") + m.name);
+      btn.addEventListener("click", function () {
+        var entries = {};
+        entries[n] = { w: st !== "watched", s: false, t: stamp() };
+        markForOthers(entries, m.id);
+      });
+      row.appendChild(btn);
       box.appendChild(row);
     });
     box.hidden = !box.children.length;
@@ -808,13 +1079,17 @@
   function initEpSheet() {
     buildStars($("ep-sheet-stars"), "Your rating", function (v) { pickRating(epSheet.n, v); });
     $("ep-sheet-fav").addEventListener("click", function () { toggleFavorite(epSheet.n); });
+    $("ep-sheet-reveal").addEventListener("click", function () { epSheet.revealed = true; renderEpSheet(); });
     Array.prototype.forEach.call($("ep-sheet-state").children, function (b) {
       b.addEventListener("click", function () {
         var n = epSheet.n;
         if (stateOf(n) === b.dataset.state) return;
-        setState(n, b.dataset.state);
-        recordChanges([n]);
-        if (b.dataset.state === "watched") noteWatched(n);
+        withCelebration(function () {
+          setState(n, b.dataset.state);
+          recordChanges([n]);
+          if (b.dataset.state === "watched") noteWatched(n);
+          updateArcProgress();
+        });
         syncRow(n - 1);
         updateProgress();
         applyFilters();
@@ -832,6 +1107,7 @@
     b.type = "button";
     b.className = "row row-button top-item";
     b.dataset.type = kindOf(ep);
+    b.classList.toggle("unwatched", !watched.has(n));
     var num = document.createElement("span");
     num.className = "ep-number";
     num.textContent = n;
@@ -1031,6 +1307,23 @@
     $("menu-bulk").addEventListener("click", openBulk);
     $("menu-guide").addEventListener("click", function () { openDialog($("guide-sheet")); });
     $("menu-top").addEventListener("click", function () { renderTop(); openDialog($("top-sheet")); });
+    $("menu-wrapped").addEventListener("click", function () { renderWrapped(); openDialog($("wrapped-sheet")); });
+    $("wrapped-share").addEventListener("click", shareWrapped);
+    $("menu-export").addEventListener("click", function () { closeDialog($("menu-sheet")); exportBackup(); });
+    $("menu-import").addEventListener("click", function () { $("restore-file").click(); });
+    $("restore-file").addEventListener("change", function () {
+      var f = $("restore-file").files[0];
+      if (f) readBackup(f);
+      $("restore-file").value = "";
+    });
+    $("restore-yes").addEventListener("click", applyRestore);
+    $("celebrate-ok").addEventListener("click", function () { closeDialog($("celebrate-sheet")); });
+    $("spoiler-shield").checked = !!prefs.shield;
+    $("spoiler-shield").addEventListener("change", function () {
+      prefs.shield = $("spoiler-shield").checked;
+      savePrefs();
+      applyShield();
+    });
     $("menu-sync").addEventListener("click", openSyncSheet);
     $("sync-chip").addEventListener("click", openSyncSheet);
     $("invite-banner").addEventListener("click", openSyncSheet);
@@ -1083,10 +1376,24 @@
   }
 
   /**
-   * Merges the shared list into this device. For each episode the most recent
-   * change wins. Returns the entries where this device is newer, to upload.
+   * Merges your saved progress from the shared list into this device. mine is null the first
+   * time you're on this list with this version: then the older single shared list (legacy)
+   * is carried over, and all your progress is uploaded.
    */
-  function applyRemote(remote) {
+  function applyRemote(mine, legacy) {
+    if (mine === null) {
+      if (legacy && Object.keys(legacy).length) mergeEntries(legacy);
+      return allEntries();
+    }
+    var toPush = mergeEntries(mine);
+    // Changes made while offline (even if the app was closed) also go to the others when
+    // you watch together
+    if (prefs.together && Object.keys(toPush).length) markForOthers(toPush);
+    return toPush;
+  }
+
+  /** For each episode the most recent change wins. Returns entries where this device is newer. */
+  function mergeEntries(remote) {
     var changed = [];
     var toPush = {};
     for (var n = 1; n <= TOTAL; n++) {
@@ -1151,15 +1458,70 @@
       if (m.last && Number.isInteger(m.last.n) && m.last.n >= 1 && m.last.n <= TOTAL && typeof m.last.at === "number") {
         clean.last = { n: m.last.n, at: m.last.at };
       }
+      clean.p = {};
+      if (m.p && typeof m.p === "object") Object.keys(m.p).forEach(function (k) {
+        var n = Number(k), e = m.p[k];
+        if (!(n >= 1 && n <= TOTAL) || !e || typeof e.w !== "boolean" || typeof e.t !== "number") return;
+        clean.p[n] = { state: e.w ? "watched" : e.s === true ? "skipped" : "none", t: e.t };
+      });
+      clean.id = id;
       next[id] = clean;
     });
     members = next;
     membersBlocked = false;
     renderPartner();
+    renderAllWho();
+    renderDeck();
     if (epSheet.n) renderEpSheet();
+    if (ratePrompt.n) renderRatePrompt();
+  }
+
+  /** Who else watched an episode (names). */
+  function othersWho(n, state) {
+    return partners().filter(function (m) { return m.p[n] && m.p[n].state === (state || "watched"); });
+  }
+  /** Marks episodes for everyone else on the list too (you watched together). */
+  var othersQueue = {}; // marks waiting for the connection to finish
+  function markForOthers(entries, onlyId) {
+    if (!sync.controller) {
+      if (!onlyId) Object.keys(entries).forEach(function (k) { othersQueue[k] = entries[k]; });
+      return;
+    }
+    partners().forEach(function (m) {
+      if (onlyId && m.id !== onlyId) return;
+      sync.controller.pushFor(m.id, entries);
+      Object.keys(entries).forEach(function (k) { // show it right away
+        var e = entries[k];
+        m.p[k] = { state: e.w ? "watched" : e.s ? "skipped" : "none", t: e.t };
+      });
+    });
+    renderAllWho();
+    if (epSheet.n) renderEpSheet();
+  }
+  function renderAllWho() {
+    if (rows.length === TOTAL) for (var i = 0; i < TOTAL; i++) renderWho(i);
+  }
+  /** Small initials on a row for the others who watched it. */
+  function renderWho(i) {
+    var n = i + 1, el = rows[i].who, who = sync.roomId ? othersWho(n) : [];
+    el.textContent = "";
+    who.slice(0, 3).forEach(function (m) {
+      var b = document.createElement("span");
+      b.className = "who-dot";
+      b.textContent = (m.name || "?").charAt(0).toUpperCase();
+      el.appendChild(b);
+    });
+    el.title = who.length ? "Watched by " + who.map(function (m) { return m.name; }).join(", ") : "";
+    el.setAttribute("aria-label", el.title);
+    el.hidden = !who.length;
   }
   function memberError() { membersBlocked = true; renderSync(); }
   function partners() { return Object.keys(members).map(function (id) { return members[id]; }); }
+  /** "Sara", "Sara and Ben", "Sara, Ben and Al" */
+  function nameList(list) {
+    var names = list.map(function (m) { return m.name; });
+    return names.length < 3 ? names.join(" and ") : names.slice(0, -1).join(", ") + " and " + names[names.length - 1];
+  }
 
   /** "Sara watched Ep 45 · 2h ago" under your progress, while sharing. */
   function renderPartner() {
@@ -1215,6 +1577,8 @@
     if (!inRoom) $("menu-sync-status").textContent = !available ? "Not set up" : inviting ? "Invited" : "Off";
     if (inRoom) $("sync-code-display").textContent = prettyCode(sync.roomId);
     $("sync-you").textContent = profile.name ? "You appear as " + profile.name + "." : "Add your name so the others know it's you.";
+    var others = partners();
+    $("sync-together-label").textContent = others.length === 1 ? "I always watch with " + others[0].name : "We always watch together";
     $("sync-members-note").hidden = !(inRoom && membersBlocked);
     if (inviting) {
       $("sync-invite-text").textContent = (sync.roomId ? "Switch to the shared list " : "Join the shared list ") +
@@ -1249,6 +1613,7 @@
       return m.connect({
         config: FIREBASE_CONFIG,
         roomId: roomId,
+        memberId: profile.id,
         mode: mode,
         api: {
           allEntries: allEntries,
@@ -1270,6 +1635,7 @@
       save(STORAGE.room, roomId);
       renderSync();
       pushMember();
+      if (Object.keys(othersQueue).length) { var q = othersQueue; othersQueue = {}; markForOthers(q); }
       setSyncStatus(lastStatus[0], lastStatus[1]);
       if (mode === "create") toast("Shared list created. Tap Invite to share it.");
       if (mode === "join") toast("Joined the shared list");
@@ -1300,7 +1666,9 @@
     sync.leaveArmed = false;
     members = {};
     membersBlocked = false;
+    othersQueue = {};
     renderPartner();
+    renderAllWho();
     save(STORAGE.room, null);
     renderSync();
     toast("Left the shared list. Your progress stays on this device.");
@@ -1366,6 +1734,13 @@
       });
     });
     $("sync-invite").addEventListener("click", shareInvite);
+    $("sync-together").checked = !!prefs.together;
+    $("sync-together").addEventListener("change", function () {
+      prefs.together = $("sync-together").checked;
+      savePrefs();
+      updateProgress();
+      toast(prefs.together ? "What you mark now counts for everyone on the list" : "What you mark now counts just for you");
+    });
     $("sync-leave").addEventListener("click", function () {
       if (sync.leaveArmed) { leaveRoom(); return; }
       sync.leaveArmed = true;
@@ -1448,6 +1823,7 @@
     renderGuide();
     initRatePrompt();
     initEpSheet();
+    applyShield();
     initInstall();
     initWelcome();
     initSync();

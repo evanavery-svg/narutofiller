@@ -207,7 +207,7 @@ label.row { cursor: pointer; }
   flex: none; width: 29px; height: 29px; border-radius: 7px; display: grid; place-items: center; color: #fff;
 }
 .row-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.row-icon.orange { background: #ff9500; } .row-icon.yellow { background: #ffcc00; }
+.row-icon.orange { background: #ff9500; } .row-icon.yellow { background: #ffcc00; } .row-icon.purple { background: #af52de; }
 .row-icon.yellow svg { fill: currentColor; stroke: none; } .row-icon.green { background: #34c759; }
 .row-icon.blue { background: #007aff; } .row-icon.gray { background: #8e8e93; }
 .row-icon.green svg { fill: currentColor; stroke: none; }
@@ -450,6 +450,62 @@ label.row { cursor: pointer; }
 
 .reset-confirm { padding: 14px 16px; display: grid; gap: 12px; }
 .reset-confirm p { margin: 0; font-size: 15px; }
+
+/* ---------- Who watched ---------- */
+.ep-who { flex: none; display: inline-flex; }
+.who-dot {
+  width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; margin-left: -6px;
+  background: #5856d6; color: #fff; font-size: 11px; font-weight: 700; box-shadow: 0 0 0 2px var(--surface);
+}
+.who-dot:first-child { margin-left: 0; }
+.rate-prompt { flex-wrap: wrap; }
+.rate-too {
+  order: 10; flex: 1 1 100%; min-height: 36px; margin: 2px 0 2px -8px; border: 0; border-radius: 10px;
+  background: var(--tint); color: var(--accent-text); font-size: 14px; font-weight: 600;
+}
+.rate-too:disabled { opacity: 1; background: var(--fill); color: var(--secondary); }
+.person-row { flex-wrap: wrap; }
+.person-text { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
+.person-name { font-size: 17px; }
+.person-state { font-size: 13px; color: var(--secondary); }
+.person-toggle { font-size: 15px; }
+.together { margin-top: 4px; }
+.together-note { margin: -4px 4px 16px; }
+.row-sub { display: block; font-size: 13px; color: var(--secondary); }
+
+/* ---------- Spoiler shield ---------- */
+.shield .episode:not(.is-watched) .ep-title,
+.shield .top-item.unwatched .row-label,
+.ep-sheet-name.is-hidden-title,
+.deck-card.is-hidden-title .deck-title { filter: blur(7px); -webkit-user-select: none; user-select: none; }
+.deck-card.is-hidden-title .deck-title { filter: blur(12px); }
+.reveal-button { margin: -10px 0 14px; font-size: 15px; }
+
+/* ---------- Arc complete ---------- */
+.celebrate { overflow: hidden; }
+.confetti { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 0; }
+.celebrate-inner { position: relative; z-index: 1; text-align: center; display: grid; gap: 10px; justify-items: center; padding-top: 26px; }
+.celebrate-emoji { font-size: 52px; line-height: 1; }
+.celebrate .sheet-title { font-size: 24px; }
+.celebrate-text { margin: 0 0 8px; font-size: 15px; color: var(--secondary); max-width: 34ch; }
+.celebrate-inner .button-filled { width: 100%; }
+
+/* ---------- Naruto Wrapped ---------- */
+.wrapped-card {
+  border-radius: 22px; padding: 20px 18px; color: #1c1205;
+  background: radial-gradient(120% 90% at 100% 0%, #ffc56b 0%, #f68b22 45%, #ec7b12 100%);
+  box-shadow: 0 16px 34px -14px rgba(194, 65, 12, 0.6);
+}
+.wrapped-who { margin: 0 0 14px; font-family: var(--font-display); font-size: 24px; font-weight: 800; color: #1c1205; }
+.wrapped-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.wrapped-stats > div { background: rgba(255, 255, 255, 0.35); border-radius: 14px; padding: 10px; display: flex; flex-direction: column; }
+.wrapped-big { font-family: var(--font-display); font-size: 30px; font-weight: 800; line-height: 1.1; color: #1c1205; }
+.wrapped-small { font-size: 13px; font-weight: 600; color: #1c1205; }
+.wrapped-details { display: grid; gap: 6px; }
+.wrapped-line { margin: 0; display: grid; gap: 1px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.35); }
+.wrapped-label { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #1c1205; }
+.wrapped-label:empty { display: none; }
+.wrapped-value { font-size: 15px; font-weight: 600; color: #1c1205; }
 
 /* ---------- Episode details ---------- */
 .kind-pill {

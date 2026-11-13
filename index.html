@@ -73,6 +73,7 @@
       <button type="button" id="rate-fav" class="fav-icon" aria-pressed="false" aria-label="Favorite">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.3s-7.6-4.6-9-9.3C2 7.6 4.3 4.7 7.4 4.7c1.9 0 3.5 1.1 4.6 2.6 1.1-1.5 2.7-2.6 4.6-2.6 3.1 0 5.4 2.9 4.4 6.3-1.4 4.7-9 9.3-9 9.3z"/></svg>
       </button>
+      <button type="button" id="rate-too" class="rate-too" hidden></button>
       <button type="button" id="rate-close" class="rate-close" aria-label="Dismiss"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
     </div>
 
@@ -86,7 +87,7 @@
           <span id="deck-kind" class="deck-kind"></span>
         </div>
         <button type="button" id="deck-find" class="deck-body">
-          <span class="deck-label">Up next</span>
+          <span id="deck-label" class="deck-label">Up next</span>
           <span id="deck-num" class="deck-num"></span>
           <span id="deck-title" class="deck-title"></span>
           <span id="deck-hint" class="deck-hint"></span>
@@ -148,6 +149,11 @@
           <span class="row-label">Ratings &amp; Favorites</span>
           <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
         </button>
+        <button type="button" id="menu-wrapped" class="row row-button">
+          <span class="row-icon purple"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg></span>
+          <span class="row-label">Your Naruto Wrapped</span>
+          <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
         <button type="button" id="menu-sync" class="row row-button">
           <span class="row-icon blue"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c.6-3.3 3-5 6-5s5.4 1.7 6 5"/><circle cx="17" cy="9" r="2.6"/><path d="M16.5 14c2.5 0 4 1.5 4.5 4.5"/></svg></span>
           <span class="row-label">Watch Together</span>
@@ -175,6 +181,22 @@
           <span class="row-label">Hide watched episodes</span>
           <input type="checkbox" id="hide-watched" class="switch" role="switch">
         </label>
+        <label class="row">
+          <span class="row-label">Spoiler shield <span class="row-sub">Blur titles you haven't watched</span></span>
+          <input type="checkbox" id="spoiler-shield" class="switch" role="switch">
+        </label>
+      </div>
+
+      <div class="group">
+        <button type="button" id="menu-export" class="row row-button">
+          <span class="row-label">Save a Backup</span>
+          <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <button type="button" id="menu-import" class="row row-button">
+          <span class="row-label">Restore from Backup</span>
+          <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <input type="file" id="restore-file" accept="application/json,.json" hidden>
       </div>
 
       <div class="group">
@@ -249,6 +271,13 @@
 
       <div id="sync-connected" hidden>
         <p class="sync-text">You're sharing this list. Code: <code id="sync-code-display" class="sync-code"></code></p>
+        <div class="group together">
+          <label class="row">
+            <span id="sync-together-label" class="row-label">We always watch together</span>
+            <input type="checkbox" id="sync-together" class="switch" role="switch">
+          </label>
+        </div>
+        <p class="footnote together-note">On: episodes you mark count for everyone on the list. Off: they count just for you; tap “… watched it too” after Watched when you watched together.</p>
         <div class="button-stack">
           <button type="button" id="sync-invite" class="button-filled">Invite</button>
           <button type="button" id="sync-leave" class="button-tinted destructive">Leave</button>
@@ -278,6 +307,7 @@
         <button type="button" class="sheet-close" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
       </div>
       <p id="ep-sheet-name" class="ep-sheet-name"></p>
+      <button type="button" id="ep-sheet-reveal" class="link-button reveal-button" hidden>Show title</button>
       <div class="segmented ep-state" id="ep-sheet-state" role="radiogroup" aria-label="Status">
         <button type="button" role="radio" data-state="none">Not Watched</button>
         <button type="button" role="radio" data-state="watched">Watched</button>
@@ -331,6 +361,54 @@
         <button type="button" id="welcome-skip" class="button-plain">Not Now</button>
       </div>
     </form>
+  </dialog>
+
+  <!-- ===== Arc complete ===== -->
+  <dialog id="celebrate-sheet" class="sheet celebrate" aria-labelledby="celebrate-title">
+    <canvas id="confetti" class="confetti" aria-hidden="true"></canvas>
+    <div class="sheet-inner celebrate-inner">
+      <div class="celebrate-emoji" aria-hidden="true">🎉</div>
+      <h2 id="celebrate-title" class="sheet-title" tabindex="-1"></h2>
+      <p id="celebrate-text" class="celebrate-text"></p>
+      <button type="button" id="celebrate-ok" class="button-filled">Nice!</button>
+    </div>
+  </dialog>
+
+  <!-- ===== Naruto Wrapped ===== -->
+  <dialog id="wrapped-sheet" class="sheet tall" aria-labelledby="wrapped-title">
+    <div class="sheet-inner">
+      <div class="sheet-head">
+        <h2 id="wrapped-title" class="sheet-title" tabindex="-1">Naruto Wrapped</h2>
+        <button type="button" class="sheet-close" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+      <div class="wrapped-card">
+        <p id="wrapped-who" class="wrapped-who"></p>
+        <div class="wrapped-stats">
+          <div><span id="wrapped-count" class="wrapped-big">0</span><span class="wrapped-small">episodes</span></div>
+          <div><span id="wrapped-hours" class="wrapped-big">0</span><span class="wrapped-small">hours</span></div>
+          <div><span id="wrapped-days" class="wrapped-big">0</span><span id="wrapped-days-label" class="wrapped-small">days</span></div>
+        </div>
+        <div id="wrapped-details" class="wrapped-details"></div>
+      </div>
+      <div class="button-stack">
+        <button type="button" id="wrapped-share" class="button-filled">Share</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- ===== Restore from a backup ===== -->
+  <dialog id="restore-sheet" class="sheet" aria-labelledby="restore-title">
+    <div class="sheet-inner">
+      <div class="sheet-head">
+        <h2 id="restore-title" class="sheet-title" tabindex="-1">Restore Backup?</h2>
+        <button type="button" class="sheet-close" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+      <p id="restore-text" class="sync-text"></p>
+      <div class="button-stack">
+        <button type="button" id="restore-yes" class="button-filled">Restore</button>
+        <button type="button" class="button-plain" data-close>Cancel</button>
+      </div>
+    </div>
   </dialog>
 
   <!-- ===== Mark several episodes at once ===== -->

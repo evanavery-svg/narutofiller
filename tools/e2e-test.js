@@ -22,6 +22,7 @@ const BASE = `http://localhost:${PORT}/naruto-filler/`;
 let failures = 0;
 // Most checks start past the first-launch "what's your name?" screen
 const presetProfile = () => {
+  window.NF_NO_CELEBRATION = true; // the arc-complete screen is tested on its own
   try {
     const key = "naruto-filler:profile:v1";
     if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({ id: "testtesttest", name: "Tester", asked: true }));
@@ -396,11 +397,82 @@ const collapse = (nums) => {
     await page.waitForTimeout(1800);
     check("rate prompt: goes away after rating", !(await page.isVisible("#rate-prompt")));
     // Pace: several episodes marked one at a time → finish estimate
-    check("pace: no estimate from a single episode", !(await page.isVisible("#pace-text")));
+    check("time left: shown under the progress", (await page.textContent("#pace-text")).includes("of canon left"), await page.textContent("#pace-text"));
+    check("pace: no estimate from a single episode", !(await page.textContent("#pace-text")).includes("a day"));
     for (let i = 0; i < 2; i++) { await page.click("#deck-watch"); await page.waitForTimeout(400); }
     check("pace: finish estimate shown", (await page.isVisible("#pace-text")) && (await page.textContent("#pace-text")).includes("a day"), await page.textContent("#pace-text"));
 
+    // Spoiler shield
+    await menuSwitch("spoiler-shield");
+    const blurOf = (sel) => page.$eval(sel, (el) => getComputedStyle(el).filter);
+    const firstUnwatched = await page.evaluate(() => Number(document.querySelector(".episode:not(.is-watched)").id.slice(3)));
+    check("shield: unwatched titles are blurred", (await blurOf(`#ep-${firstUnwatched} .ep-title`)).includes("blur"));
+    const someWatched = await page.evaluate(() => Number(document.querySelector(".episode.is-watched").id.slice(3)));
+    check("shield: watched titles stay readable", (await blurOf(`#ep-${someWatched} .ep-title`)) === "none");
+    check("shield: the up-next title is hidden", (await page.locator("#deck-card.is-hidden-title").count()) === 1 && (await page.textContent("#deck-label")).includes("tap to reveal"));
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.click("#deck-find");
+    check("shield: first tap on the card reveals its title", (await page.locator("#deck-card.is-hidden-title").count()) === 0);
+    await page.click(`#ep-${firstUnwatched} .ep-info`);
+    check("shield: details hide the title with a Show title button", (await page.locator("#ep-sheet-name.is-hidden-title").count()) === 1 && await page.isVisible("#ep-sheet-reveal"));
+    await page.click("#ep-sheet-reveal");
+    check("shield: Show title reveals it", (await page.locator("#ep-sheet-name.is-hidden-title").count()) === 0);
+    await page.keyboard.press("Escape");
+    await menuSwitch("spoiler-shield");
+    check("shield: off again shows everything", (await blurOf(`#ep-${firstUnwatched} .ep-title`)) === "none");
+
+    // Naruto Wrapped
+    await openMenu();
+    await page.click("#menu-wrapped");
+    const watchedCount = await page.locator(".episode input:checked").count();
+    check("wrapped: opens with your stats", await isOpen("wrapped-sheet") && (await page.textContent("#wrapped-count")) === String(watchedCount) && (await page.textContent("#wrapped-who")) === "Tester's Naruto");
+    check("wrapped: lists your top episode and favorite arc", (await page.textContent("#wrapped-details")).includes("Ep 26") && (await page.textContent("#wrapped-details")).includes("Favorite arc"));
+    await page.keyboard.press("Escape");
+
+    // Backup: save, clear, restore
+    await openMenu();
+    const [download] = await Promise.all([page.waitForEvent("download"), page.click("#menu-export")]);
+    const backupPath = path.join(tmp, "backup.json");
+    await download.saveAs(backupPath);
+    const backup = JSON.parse(fs.readFileSync(backupPath, "utf8"));
+    check("backup: file has watched episodes, ratings and favorites", backup.app === "naruto-filler-guide" && backup.watched.length === watchedCount && backup.ratings["26"] === 5 && backup.favorites.includes(1), download.suggestedFilename());
+    await openMenu();
+    await page.click("#reset-button");
+    await page.click("#reset-yes");
+    check("backup: (progress cleared for the test)", (await page.locator(".episode input:checked").count()) === 0);
+    await openMenu();
+    await page.setInputFiles("#restore-file", backupPath);
+    await waitFor(() => isOpen("restore-sheet"), 3000);
+    check("backup: restore asks first, with a summary", (await page.textContent("#restore-text")).includes(`${watchedCount} watched`), await page.textContent("#restore-text"));
+    await page.click("#restore-yes");
+    check("backup: restored", (await page.locator(".episode input:checked").count()) === watchedCount && (await page.textContent("#ep-26 .ep-meta")).includes("5"));
+    fs.writeFileSync(path.join(tmp, "not-a-backup.json"), "{\"hello\": 1}");
+    await openMenu();
+    await page.setInputFiles("#restore-file", path.join(tmp, "not-a-backup.json"));
+    await page.waitForTimeout(300);
+    check("backup: other files are refused", !(await isOpen("restore-sheet")) && (await page.textContent("#toast")).includes("isn't a Naruto Filler Guide backup"));
+    await closeSheets();
+
     check("mobile: no horizontal scroll", await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+
+    // Finishing an arc celebrates (fresh browser, celebrations on)
+    {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+      await ctx.addInitScript(() => localStorage.setItem("naruto-filler:profile:v1", JSON.stringify({ id: "partypartypa", name: "P", asked: true })));
+      const p = await ctx.newPage();
+      await p.goto(BASE);
+      await p.click("#menu-open");
+      await p.click("#menu-bulk");
+      await p.fill("#bulk-to", "18");
+      await p.click("#bulk-watch");
+      check("celebrate: Mark Several doesn't celebrate", !(await p.evaluate(() => document.getElementById("celebrate-sheet").open)));
+      await p.check("#ep-19 input");
+      check("celebrate: finishing Land of Waves celebrates", await p.evaluate(() => document.getElementById("celebrate-sheet").open) && (await p.textContent("#celebrate-title")) === "Land of Waves complete!");
+      check("celebrate: says what's next", (await p.textContent("#celebrate-text")).includes("Next up: Chūnin Exams"), await p.textContent("#celebrate-text"));
+      await p.click("#celebrate-ok");
+      check("celebrate: Nice! closes it", !(await p.evaluate(() => document.getElementById("celebrate-sheet").open)));
+      await ctx.close();
+    }
 
     // First launch: asks for your name (fresh browser, no saved data)
     {
@@ -424,7 +496,7 @@ const collapse = (nums) => {
       await p.click("#menu-bulk");
       await p.fill("#bulk-to", "30");
       await p.click("#bulk-watch");
-      check("pace: Mark Several doesn't count toward your pace", !(await p.isVisible("#pace-text")));
+      check("pace: Mark Several doesn't count toward your pace", !(await p.textContent("#pace-text")).includes("a day"));
       await ctx.close();
       const ctx2 = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
       const p2 = await ctx2.newPage();

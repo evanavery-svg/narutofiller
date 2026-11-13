@@ -36,8 +36,26 @@ To keep things simple, the site sorts episodes into just two categories:
   - Rated and favorite episodes show their stars and a heart in the list, and each arc shows your average rating.
   - **⋯ → Ratings & Favorites** lists your top-rated episodes (best first) and your favorites. Tap one to open it.
 - **Episode details.** The **ⓘ** panel shows the episode's arc, which manga chapters it adapts (or "anime-only" for filler), when it was marked watched, and, on a shared list, the other people's ratings and favorites ("Sara ★★★★★ ♥"). There are no plot summaries: the only sources are the wiki's spoiler-heavy synopses, which aren't ours to copy.
-- **Finish estimate.** Under your progress: "About 3 a day · you'll finish canon around Dec 20". It's based on the episodes you've marked one at a time in the last two weeks; **Mark Several** and other bulk changes don't count. It says "the series" instead of "canon" when **Skip filler when continuing** is off.
+- **Time left and finish estimate.** Under your progress: "42h 33m of canon left · about 3 a day · done with canon around Dec 20".
+  - Time left counts the episodes still ahead of you, at about 23 minutes each.
+  - The pace uses the episodes you've marked one at a time in the last two weeks; **Mark Several** and other bulk changes don't count.
+  - It says "the series" instead of "canon" when **Skip filler when continuing** is off.
+- **Spoiler shield.** Turn it on in the **⋯** menu to blur the titles of episodes you haven't watched: in the list, on the up-next card, in **Ratings & Favorites**, and in the map's tooltips.
+  - The first tap on the up-next card reveals its title.
+  - The details (**ⓘ**) panel has a **Show title** button.
+  - Watched titles stay readable.
+- **Arc complete.** Finishing an arc with a single tick, on the card, a row or in the details, shows confetti and a card ("Land of Waves complete! 19 episodes watched · your average ★ 4.0. Next up: Chūnin Exams."). Marking many at once doesn't celebrate. While skipping filler, an arc counts as finished once its canon episodes are done.
+- **Naruto Wrapped** (**⋯** menu). A summary card you can share:
+  - episodes, hours and days watched
+  - your top-rated episodes and favorite arc (your best-rated, or the one you watched most)
+  - on a shared list, how many ratings you agree on with each person, and your biggest debate
+- **Backup** (**⋯ → Save a Backup / Restore from Backup**). Saves your progress, skips, ratings, favorites and name to a `.json` file, and restores it later. Restoring asks first, and on a shared list your restored progress syncs.
 - **Partner activity.** While you share a list, a small line under your progress shows what the other person watched last ("Sara watched Ep 45 · 2h ago"). Tap it to open that episode.
+- **Who watched it.** On a shared list, everyone keeps their own progress:
+  - Ticking marks an episode for you only, and **Continue** (the up-next card) follows your progress.
+  - Episodes the others watched show their initial on the row.
+  - The up-next card says "Sara already watched it".
+  - Each episode's details show everyone's status, with a button to mark it for them.
 - **Color-coded episodes.** Every row has a green (canon) or red (filler) stripe and episode number. Filler episodes also get a red **Filler** tag. Skipped episodes show a dash in their circle.
 - **All / Canon / Filler.** A segmented control above the list shows everything, only canon, or only filler.
 - **Search.** One box that matches the episode number (`135`, `#135`, `ep 135`) or any part of the title. It ignores case and updates as you type. It works together with the filters.
@@ -49,7 +67,9 @@ To keep things simple, the site sorts episodes into just two categories:
   - **Mark Several Episodes** (in the **⋯** menu): pick a range (for example 1 to 80) and mark it all as watched or unwatched at once, optionally skipping filler. A message with **Undo** confirms it.
   - A **Hide watched episodes** switch (in the **⋯** menu).
   - **Reset Progress** (in the **⋯** menu), which asks you to confirm first.
-- **Watch together.** Two (or more) people can share one watched list through a free Firebase database. Episodes either of you ticks or skips show up on the other's phone within a second or two, and changes made offline sync later. It's off until you add your own Firebase project; see [Shared progress (Firebase)](#shared-progress-firebase). It lives in the **⋯** menu. While you're sharing, a small **Shared** label next to your progress shows the sync status, and tapping it opens Watch Together.
+- **Watch together.** Two (or more) people can share their watch progress through a free Firebase database: each person's ticks and skips, plus names, ratings and activity, show up on the others' phones within a second or two, and changes made offline sync later.
+  - Watched one together? Tap **"Sara watched it too"** in the rating bar after **Watched**.
+  - If you always watch together, turn on **We always watch together** (in Watch Together). Then everything you mark counts for everyone, like one shared list. It's off until you add your own Firebase project; see [Shared progress (Firebase)](#shared-progress-firebase). It lives in the **⋯** menu. While you're sharing, a small **Shared** label next to your progress shows the sync status, and tapping it opens Watch Together.
 - **Skip-filler guide.** A separate page (in the **⋯** menu) that lists the episodes to watch, collapsed into ranges, and the episodes to skip, with a map showing which to watch. Watch **1–25, 27–96, 98–100, 107–135, 141–142, 220** (130 episodes) and skip the 90 filler episodes, which saves about **34 h 30 min** at about 23 minutes per episode.
 - **PWA.** You can install it on a phone or desktop. Every file is saved on the first visit, so the whole app then works offline.
 - **Get the app.** **Get the App** in the **⋯** menu shows step-by-step install instructions for the device you're on (iPhone/iPad, Android or desktop). They also pop up by themselves when someone opens a Watch together invite link on a phone.
@@ -192,8 +212,13 @@ The new rules also allow a `members` field: each person's name, ratings, favorit
 
 From then on:
 
+- Everyone keeps their **own progress**. A tick marks the episode for you, and the others see your initial on that row. The up-next card follows your progress.
+- **Watched one together?** After **Watched** on the card, tap **"Sara watched it too"**. Or open the episode's **ⓘ** details and tap **Mark watched** next to her name.
+- **We always watch together** (a switch in Watch Together, set on each phone): while it's on, every tick, skip, **Mark Several** and **Reset Progress** on that phone counts for everyone on the list.
 - Each person's name, star ratings, favorites and latest episode are shared too. Ratings stay per person: you see the other's next to yours in an episode's **ⓘ** details, and "Sara watched Ep 45" shows under your progress.
-- Ticks, unticks, skips and **Reset progress** show up on both devices, usually within a second or two. Reset clears the list for everyone, and its confirm message says so.
+- Changes show up on the other devices usually within a second or two.
+- **Older lists** (from before per-person progress) carry over automatically: the first time each phone connects with the new version, the list's progress becomes that person's own. No new security rules are needed.
+- Each phone counts as its own person, so someone who uses two devices shows up twice.
 - The status dot shows **Synced**, **Saving…**, or **Offline · will sync later**.
 - If you tick episodes with no connection, or even close the app before reconnecting, the changes are saved on the phone and sent the next time it opens online. When both people changed the same episode, the most recent change wins.
 - **Leave** (tap twice) stops sharing on that device. Your progress stays, but later ticks are no longer shared. You'll need the code to rejoin.
@@ -203,7 +228,7 @@ From then on:
 ### Privacy and limits
 
 - **The code works like a password.** Anyone with your code or invite link can see and change that list. Nobody can browse the database to find codes: the rules block listing, and codes are random 16-character strings with about 79 bits of randomness. To revoke access, both of you **Leave**, create a new list, and optionally delete the old document under `rooms` in the Firebase console.
-- **Only watch data is stored.** Each list is one document holding episode numbers, watched yes/no, and when each was changed. There are no names, emails or accounts.
+- **Only watch data and first names are stored.** Each list is one document. For each person it holds the first name they entered, their watched/skipped episodes with when each changed, their star ratings, their favorites and their latest episode. There are no emails or accounts.
 - **Free plan limits.** At the time of writing, the Spark plan's free quota for a Standard database is 50,000 document reads, 20,000 writes and 20,000 deletes per day, plus 1 GiB of storage ([current limits](https://firebase.google.com/docs/firestore/quotas)). Two people ticking episodes use a tiny fraction of that. Because the project has no billing account, it can't charge you. If a limit were ever reached, sync requests would be refused until the quota resets (daily, around midnight Pacific time), and the app would keep working on each device.
 - **Phone clocks matter.** "Most recent change wins" uses each device's clock. If a phone's clock is badly wrong, its changes might win when they shouldn't. Normal automatic phone time is fine.
 - **Optional extra lock-down.** In the [Google Cloud console](https://console.cloud.google.com/apis/credentials) for the same project, you can restrict the browser API key to your site with an HTTP referrer restriction such as `https://<username>.github.io/*`.
@@ -320,7 +345,18 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
   - filler shows "anime-only"
   - **Ratings & Favorites** sorts best first, and everything survives a reload
   - the "Rate Ep N" bar appears after **Watched** and goes away after rating
-- **Finish estimate:** it appears after a few episodes marked one at a time, but not after **Mark Several** alone.
+- **Finish estimate:** time left always shows; the pace appears after a few episodes marked one at a time, but not after **Mark Several** alone.
+- **Spoiler shield:**
+  - unwatched titles blur while watched ones don't
+  - the up-next card reveals its title on the first tap
+  - the details panel's **Show title** works
+  - turning it off shows everything
+- **Naruto Wrapped:** the stats, top episode and favorite arc.
+- **Backup:**
+  - the saved file contains progress, ratings and favorites
+  - after clearing, restoring asks first, shows a summary and brings everything back
+  - other files are refused
+- **Arc complete:** finishing Land of Waves with a single tick celebrates and names the next arc, while **Mark Several** doesn't.
 - **Guide:** ranges, counts, time saved and the map, and tapping a square jumps to that episode.
 - **PWA:**
   - the service worker registers with the subpath scope and controls the page
@@ -359,6 +395,13 @@ It checks:
 
 - **Create and join:** creating a list; joining through an invite link, and by pasting a code or the whole link into **Join with a Code**; the two devices' existing progress being merged; error messages for unknown and badly formed codes.
 - **Shared label and banner:** the **Shared** label appears on the main screen and opens Watch Together, and the invitation banner shows until you join.
+- **Who watched it:**
+  - after joining, each phone keeps its own progress and sees the other's initials
+  - the up-next card says who already watched it
+  - a solo tick stays solo
+  - "Ana watched it too" and the details' **Mark watched** button mark it for the other person
+- **We always watch together:** with it on for both phones, every check below (live sync, bulk, skips, offline, reset) behaves like one shared list.
+- **Older lists:** an old single-list room carries over as the joining person's own progress.
 - **People:**
   - each device's name, and what each person watched last, reaches the other device
   - ratings and favorites stay per person, and each sees the other's on the episode details
@@ -369,7 +412,7 @@ It checks:
 - **Leave:** stopping sharing, and staying left after a reload.
 - **Security rules:** listing rooms, malformed codes, unexpected fields, deletes, and other collections are all refused.
 
-The last runs passed all 174 checks in `e2e-test.js` and all 46 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 99** in light mode, and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
+The last runs passed all 193 checks in `e2e-test.js` and all 60 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 99** in light mode, and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
 
 ## Legal
 
