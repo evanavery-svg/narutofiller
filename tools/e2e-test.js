@@ -59,6 +59,8 @@ const collapse = (nums) => {
   const site = path.join(tmp, "naruto-filler");
   fs.mkdirSync(site);
   for (const f of FILES) fs.cpSync(path.join(ROOT, f), path.join(site, f), { recursive: true });
+  // This test covers the site with sharing switched off (tools/sync-test.js covers it switched on)
+  fs.writeFileSync(path.join(site, "firebase-config.js"), "const FIREBASE_CONFIG = null;\n");
   const server = spawn("python3", ["-m", "http.server", String(PORT), "--bind", "127.0.0.1"], { cwd: tmp, stdio: "ignore" });
   // Wait until the server answers
   for (let i = 0; i < 50; i++) {

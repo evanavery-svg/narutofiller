@@ -2,7 +2,7 @@
  * Cache-first for the app shell. Bump CACHE_VERSION whenever any file changes
  * so returning visitors get the "Update available" banner.
  */
-const CACHE_VERSION = "v1.3.0";
+const CACHE_VERSION = "v1.3.1";
 const CACHE_NAME = "naruto-filler-" + CACHE_VERSION;
 
 // Relative to this file's location, so it works at a GitHub Pages subpath.
