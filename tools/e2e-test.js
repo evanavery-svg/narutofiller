@@ -89,7 +89,7 @@ const collapse = (nums) => {
         if (!navigator.serviceWorker) return true;
         try { return (await navigator.serviceWorker.getRegistrations()).length === 0; } catch (e) { return true; } // not allowed on file://
       }));
-      check("file://: offline/install note shown", await page.locator("#file-note").isVisible());
+      check("file://: offline/install note in the menu", await page.$eval("#file-note", (e) => !e.hidden));
       check("file://: sharing explains it needs the hosted site", (await page.textContent("#sync-unavailable-text")).includes("hosted site"));
       await page.locator(`.episode >> nth=4 >> input`).check();
       await page.reload();
@@ -113,14 +113,28 @@ const collapse = (nums) => {
 
     const visibleNums = () => page.$$eval(".episode:not([hidden])", (els) => els.map((e) => Number(e.id.slice(3))));
     const show = (v) => page.click(`#filters [data-show="${v}"]`);
+    const isOpen = (id) => page.evaluate((i) => document.getElementById(i).open, id);
+    const openMenu = async () => { if (!(await isOpen("menu-sheet"))) await page.click("#menu-open"); };
+    const closeSheets = () => page.evaluate(() => document.querySelectorAll("dialog[open]").forEach((d) => d.close()));
+    const menuSwitch = async (id) => { await openMenu(); await page.click("#" + id); await closeSheets(); };
+    const openGuide = async () => { await openMenu(); await page.click("#menu-guide"); };
 
     check("http: 220 episodes rendered", (await page.locator(".episode").count()) === 220);
-    check("http: one-line explanation of canon vs filler", (await page.textContent(".legend-note")).includes("Filler"));
+    check("http: main screen is just progress, search, switcher and list", (await page.locator("main > :not([hidden]):not(.empty-state)").count()) === 3);
+    check("http: canon vs filler explained in the menu", (await page.textContent(".about")).includes("Filler"));
     check("categories: All / Canon / Filler switcher", (await page.$$eval("#filters [data-show]", (b) => b.map((x) => x.dataset.show).join(","))) === "all,canon,filler");
     check("categories: a 'mixed' episode (7) counts as canon (no Filler tag)", (await page.locator("#ep-7 .badge").count()) === 0);
     check("categories: filler episode (26) is tagged Filler", (await page.textContent("#ep-26 .badge")) === "Filler");
     check("categories: only the 90 filler episodes are tagged", (await page.locator(".episode .badge").count()) === 90);
+    await openMenu();
+    check("menu: opens with its rows", await isOpen("menu-sheet") && await page.isVisible("#menu-bulk") && await page.isVisible("#menu-guide") && await page.isVisible("#menu-sync"));
+    check("menu: Watch Together says 'Not set up'", (await page.textContent("#menu-sync-status")) === "Not set up");
+    await page.click("#menu-sync");
+    check("sync: sheet replaces the menu", await isOpen("sync-sheet") && !(await isOpen("menu-sheet")));
     check("sync: not configured -> setup note, no buttons", (await page.locator("#sync-unavailable").isVisible()) && !(await page.locator("#sync-create").isVisible()));
+    await page.keyboard.press("Escape");
+    check("sync: Escape closes", !(await isOpen("sync-sheet")));
+    check("sync: no 'Shared' label or invite banner when not sharing", !(await page.isVisible("#sync-chip")) && !(await page.isVisible("#invite-banner")));
 
     // Filters
     await show("canon");
@@ -154,7 +168,6 @@ const collapse = (nums) => {
     // Watch tracker
     for (const n of [1, 2, 3, 26]) await page.check(`#ep-${n} input`);
     check("tracker: progress 4 of 220", (await page.textContent("#progress-all-text")) === "4 of 220");
-    check("tracker: percent 2%", (await page.textContent("#progress-percent")) === "2%");
     check("tracker: canon progress 3 of 130", (await page.textContent("#progress-canon-text")) === "3 of 130 canon episodes");
     check("tracker: button says Continue", (await page.textContent("#next-label")) === "Continue");
     // next ep (skip filler on by default)
@@ -162,9 +175,9 @@ const collapse = (nums) => {
     for (let n = 4; n <= 25; n++) await page.check(`#ep-${n} input`);
     await page.uncheck("#ep-26 input");
     check("next: skip filler -> ep 27 (skips 26)", (await page.textContent("#next-hint")).startsWith("Ep 27 "));
-    await page.click("#skip-filler-next");
+    await menuSwitch("skip-filler-next");
     check("next: no skip -> ep 26", (await page.textContent("#next-hint")).startsWith("Ep 26 "));
-    await page.click("#skip-filler-next");
+    await menuSwitch("skip-filler-next");
     // jump while filter hides target
     await show("filler");
     await page.fill("#search", "zzz");
@@ -174,10 +187,10 @@ const collapse = (nums) => {
     check("next: target highlighted", await page.locator("#ep-27.is-highlight").count() === 1);
     check("next: target in viewport", await page.locator("#ep-27").evaluate((el) => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }));
     // hide watched
-    await page.click("#hide-watched");
+    await menuSwitch("hide-watched");
     v = await visibleNums();
     check("hide watched: eps 1–25 hidden", v[0] === 26 && v.length === 195, v.length);
-    await page.click("#hide-watched");
+    await menuSwitch("hide-watched");
 
     // persistence
     await page.reload();
@@ -186,33 +199,37 @@ const collapse = (nums) => {
     check("persistence: progress after reload", (await page.textContent("#progress-all-text")) === "25 of 220");
 
     // reset confirm
+    await openMenu();
     await page.click("#reset-button");
     check("reset: confirm step shown", await page.locator("#reset-confirm").isVisible());
     await page.click("#reset-cancel");
     check("reset: cancel keeps progress", (await page.locator(".episode input:checked").count()) === 25);
     await page.click("#reset-button");
     await page.click("#reset-yes");
+    check("reset: menu closes afterwards", !(await isOpen("menu-sheet")));
     check("reset: confirm clears all", (await page.locator(".episode input:checked").count()) === 0);
     await page.reload();
     check("reset: cleared state persists", (await page.locator(".episode input:checked").count()) === 0);
 
     // Skip-filler guide
-    await page.click("#tab-guide");
+    await openGuide();
+    check("guide: opens from the menu", await isOpen("guide-sheet"));
     // Canon on the site = AFL's "Manga Canon" + "Mixed Canon/Filler"
     const watchAll = collapse([...expand(AFL.canon), ...expand(AFL.mixed)]);
     check("guide: watch ranges match data", (await page.textContent("#guide-watch-text")) === watchAll, await page.textContent("#guide-watch-text"));
     check("guide: skip ranges match data", (await page.textContent("#guide-skip-text")) === collapse(expand(AFL.filler)));
     check("guide: count 130", (await page.textContent("#guide-watch-count")) === "130");
     check("guide map: 220 squares, 130 lit", (await page.locator("#guide-map .cell").count()) === 220 && (await page.locator("#guide-map .cell.is-on").count()) === 130);
-    check("guide: time saved 90×23 = 34 h 30 min", (await page.textContent("#guide-time-saved")) === "~34 h 30 min");
+    check("guide: time saved 90×23 = 34h 30m", (await page.textContent("#guide-time-saved")) === "~34h 30m");
     await page.screenshot({ path: path.join(tmp, "guide-mobile.png"), fullPage: true });
     await page.click('#guide-map .cell[data-n="150"]');
     await page.waitForTimeout(700);
+    check("guide map: tapping a square closes the guide", !(await isOpen("guide-sheet")));
     check("guide map: tapping a square jumps to that episode", await page.locator("#ep-150").isVisible() && (await page.locator("#ep-150.is-highlight").count()) === 1);
     await page.screenshot({ path: path.join(tmp, "episodes-mobile.png") });
 
     // Mark several episodes at once
-    const bulkOpen = async () => { await page.click("#bulk-open"); return page.evaluate(() => document.getElementById("bulk-sheet").open); };
+    const bulkOpen = async () => { await openMenu(); await page.click("#menu-bulk"); return isOpen("bulk-sheet"); };
     check("bulk: opens", await bulkOpen());
     check("bulk: starts at episode 1, filler included", (await page.inputValue("#bulk-from")) === "1" && !(await page.isChecked("#bulk-skip-filler")));
     check("bulk: needs a 'to' episode first", await page.isDisabled("#bulk-watch"));
@@ -300,14 +317,14 @@ const collapse = (nums) => {
     const originalHtml = fs.readFileSync(htmlPath, "utf8");
     // python's http.server only has 1-second Last-Modified precision: give each edit a distinct time
     const touch = (file, ahead) => { const t = Date.now() / 1000 + ahead; fs.utimesSync(file, t, t); };
-    fs.writeFileSync(htmlPath, originalHtml.replace("Original series", marker + " Original series"));
+    fs.writeFileSync(htmlPath, originalHtml.replace('<h1 class="title">Naruto Filler Guide</h1>', '<h1 class="title">' + marker + '</h1>'));
     touch(htmlPath, 10);
     await page.goto(BASE);
-    check("update: next open shows the newest files", (await page.textContent(".subtitle")).includes(marker));
+    check("update: next open shows the newest files", (await page.textContent(".title")).includes(marker));
     check("update: watched state kept", await page.locator("#ep-10 input").isChecked());
     await context.setOffline(true);
     await page.reload();
-    check("update: offline open uses the newest saved copy", (await page.textContent(".subtitle")).includes(marker));
+    check("update: offline open uses the newest saved copy", (await page.textContent(".title")).includes(marker));
     await context.setOffline(false);
 
     // Returning to the app: the service worker reports whether anything changed
@@ -361,9 +378,13 @@ const collapse = (nums) => {
       }
       await p.click("#install-later");
       check(`install (${name}): "Maybe later" closes it`, !(await p.evaluate(() => document.getElementById("install-sheet").open)));
-      check(`install (${name}): invite still waiting in the card`, await p.isVisible("#sync-invite-prompt"));
-      check(`install (${name}): Get app button in the header`, await p.isVisible("#get-app"));
-      await p.click("#get-app");
+      check(`install (${name}): invite banner waits on the main screen`, await p.isVisible("#invite-banner"));
+      await p.click("#invite-banner");
+      check(`install (${name}): banner opens the invite`, await p.evaluate(() => document.getElementById("sync-sheet").open) && await p.isVisible("#sync-invite-prompt"));
+      await p.keyboard.press("Escape");
+      await p.click("#menu-open");
+      check(`install (${name}): Get the App is in the menu`, await p.isVisible("#menu-get-app"));
+      await p.click("#menu-get-app");
       check(`install (${name}): Get app reopens the instructions`, await p.evaluate(() => document.getElementById("install-sheet").open));
       await p.keyboard.press("Escape");
       check(`install (${name}): Escape closes it`, !(await p.evaluate(() => document.getElementById("install-sheet").open)));
@@ -377,7 +398,8 @@ const collapse = (nums) => {
       await p.goto(BASE2 + "#join=" + CODE);
       await p.waitForTimeout(500);
       check("install (desktop): invite link doesn't pop up instructions", !(await p.evaluate(() => document.getElementById("install-sheet").open)));
-      check("install (desktop): invite shown in the card", await p.isVisible("#sync-invite-prompt"));
+      check("install (desktop): invite opens Watch Together instead", await p.evaluate(() => document.getElementById("sync-sheet").open) && await p.isVisible("#sync-invite-prompt"));
+      check("install (desktop): menu shows 'Invited'", (await p.textContent("#menu-sync-status")) === "Invited");
       await ctx.close();
     }
 

@@ -87,8 +87,13 @@ async function waitFor(fn, timeout = 8000) {
   const watchedOf = (page) => page.$$eval(".episode input:checked", (els) => els.map((e) => Number(e.dataset.number)));
   const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   const status = (page) => page.getAttribute("#sync-status", "data-state");
-  const tick = (page, n) => page.check(`#ep-${n} input`);
-  const untick = (page, n) => page.uncheck(`#ep-${n} input`);
+  const isOpen = (page, id) => page.evaluate((i) => document.getElementById(i).open, id);
+  const closeSheets = (page) => page.evaluate(() => document.querySelectorAll("dialog[open]").forEach((d) => d.close()));
+  const openMenu = async (page) => { if (!(await isOpen(page, "menu-sheet"))) await page.click("#menu-open"); };
+  const openSync = async (page) => { if (!(await isOpen(page, "sync-sheet"))) { await openMenu(page); await page.click("#menu-sync"); } };
+  // Close any open sheet first, as a person would, before tapping an episode
+  const tick = async (page, n) => { await closeSheets(page); await page.check(`#ep-${n} input`); };
+  const untick = async (page, n) => { await closeSheets(page); await page.uncheck(`#ep-${n} input`); };
 
   try {
     const A = await device("A");
@@ -96,10 +101,12 @@ async function waitFor(fn, timeout = 8000) {
     await A.page.goto(BASE);
     await B.page.goto(BASE);
 
+    await openSync(A.page);
     check("setup: create/join shown when configured", await A.page.locator("#sync-create").isVisible());
 
     // A has some progress, then creates a shared list
     for (const n of [1, 2, 3]) await tick(A.page, n);
+    await openSync(A.page);
     await A.page.click("#sync-create");
     await waitFor(async () => (await status(A.page)) === "synced", 15000);
     check("create: A connected and synced", (await status(A.page)) === "synced", await status(A.page));
@@ -111,6 +118,7 @@ async function waitFor(fn, timeout = 8000) {
     await B.page.goto(BASE + "#join=" + code);
     check("invite: B sees a join prompt", await B.page.locator("#sync-invite-prompt").isVisible());
     check("invite: link removed from address bar", !B.page.url().includes("join="));
+    check("invite: banner on B's main screen", await B.page.isVisible("#invite-banner"));
     await B.page.click("#sync-invite-accept");
     await waitFor(async () => (await status(B.page)) === "synced", 15000);
     check("join: B synced", (await status(B.page)) === "synced", await status(B.page));
@@ -126,7 +134,12 @@ async function waitFor(fn, timeout = 8000) {
     check("live: progress text updated on A", (await A.page.textContent("#progress-all-text")) === "4 of 220");
 
     // Marking several at once (and Undo) syncs too
-    await A.page.click("#bulk-open");
+    check("chip: A shows 'Shared' on the main screen", (await A.page.textContent("#sync-chip")) === "Shared" && await A.page.isVisible("#sync-chip"));
+    check("chip: invite banner gone after joining", !(await B.page.isVisible("#invite-banner")));
+    check("menu: Watch Together shows 'Synced'", (await A.page.textContent("#menu-sync-status")) === "Synced");
+    await closeSheets(A.page);
+    await openMenu(A.page);
+    await A.page.click("#menu-bulk");
     await A.page.fill("#bulk-from", "100");
     await A.page.fill("#bulk-to", "105");
     await A.page.click("#bulk-watch");
@@ -163,12 +176,15 @@ async function waitFor(fn, timeout = 8000) {
     check("resume: change made offline before closing reaches A", (await waitFor(async () => (await watchedOf(A.page)).includes(7), 15000)) === true, (await watchedOf(A.page)).join(","));
 
     // Reset clears the list for both
+    await openMenu(A.page);
     await A.page.click("#reset-button");
     check("reset: wording mentions the shared list", (await A.page.textContent("#reset-question")).includes("everyone on the shared list"));
     await A.page.click("#reset-yes");
     check("reset: clears B too", (await waitFor(async () => (await watchedOf(B.page)).length === 0, 10000)) === true, (await watchedOf(B.page)).join(","));
 
     // Leaving stops syncing (two taps)
+    await B.page.click("#sync-chip");
+    check("chip: tapping it opens Watch Together", await isOpen(B.page, "sync-sheet"));
     await B.page.click("#sync-leave");
     check("leave: first tap asks to confirm", (await B.page.textContent("#sync-leave")).includes("again"));
     await B.page.click("#sync-leave");
@@ -177,6 +193,7 @@ async function waitFor(fn, timeout = 8000) {
     await sleep(1500);
     check("leave: B's changes no longer reach A", !(await watchedOf(A.page)).includes(8));
     await B.page.reload();
+    await openSync(B.page);
     check("leave: stays left after reload", await B.page.locator("#sync-create").isVisible());
 
     // Bad codes

@@ -47,8 +47,7 @@
   var defaultPrefs = {
     show: "all",          // "all" | "canon" | "filler"
     hideWatched: false,
-    skipFillerNext: true,
-    tab: "episodes"
+    skipFillerNext: true
   };
   var storedPrefs = load(STORAGE.prefs, {}) || {};
   var prefs = Object.assign({}, defaultPrefs, storedPrefs);
@@ -57,6 +56,7 @@
     prefs.show = hasCanon && !hasFiller ? "canon" : hasFiller && !hasCanon ? "filler" : "all";
   }
   delete prefs.types;
+  delete prefs.tab; // older versions had tabs
   if (["all", "canon", "filler"].indexOf(prefs.show) === -1) prefs.show = "all";
   function showsKind(kind) { return prefs.show === "all" || prefs.show === kind; }
   var query = "";
@@ -306,9 +306,6 @@
       rows[i].li.hidden = !vis;
       if (vis) shown++;
     }
-    $("result-count").textContent = shown === TOTAL
-      ? "Showing all " + TOTAL + " episodes"
-      : "Showing " + shown + " of " + TOTAL + " episodes";
     $("empty-state").hidden = shown !== 0;
   }
 
@@ -337,7 +334,6 @@
     var canon = canonEpisodes.filter(function (e) { return watched.has(e.number); }).length;
     var pct = Math.round((total / TOTAL) * 100);
     $("progress-all-text").textContent = total + " of " + TOTAL;
-    $("progress-percent").textContent = pct + "%";
     $("progress-canon-text").textContent = canon + " of " + canonEpisodes.length + " canon episodes";
     setBar("progress-all-bar", total, TOTAL);
 
@@ -367,7 +363,7 @@
   /** Scrolls the list to an episode, adjusting filters/search if they hide it. */
   function jumpTo(ep) {
     var i = ep.number - 1;
-    if (prefs.tab !== "episodes") selectTab("episodes");
+    closeAllSheets();
     // Make sure the target is visible: clear search / enable its type if needed.
     if (!isVisible(i)) {
       if (prefs.hideWatched && watched.has(ep.number)) {
@@ -390,9 +386,10 @@
   }
 
   // ---------- Reset (two-step confirm) ----------
-  function showResetConfirm(show) {
+  function showResetConfirm(show, quiet) {
     $("reset-button").hidden = show;
     $("reset-confirm").hidden = !show;
+    if (quiet) return;
     if (show) ($("reset-yes").hidden ? $("reset-cancel") : $("reset-yes")).focus();
     else $("reset-button").focus();
   }
@@ -403,14 +400,20 @@
     for (var i = 0; i < TOTAL; i++) syncRow(i);
     updateProgress();
     applyFilters();
-    showResetConfirm(false);
+    showResetConfirm(false, true);
+    closeDialog($("menu-sheet"));
     toast("Progress reset");
   }
 
   // ---------- Mark several episodes at once ----------
+  /** Opens a sheet (closing any other open sheet first, like iOS). */
   function openDialog(dlg, focusEl) {
+    document.querySelectorAll("dialog.sheet").forEach(function (d) { if (d !== dlg) closeDialog(d); });
     if (!dlg.open) { if (typeof dlg.showModal === "function") dlg.showModal(); else dlg.setAttribute("open", ""); }
-    if (focusEl) focusEl.focus();
+    (focusEl || dlg.querySelector(".sheet-title")).focus();
+  }
+  function closeAllSheets() {
+    document.querySelectorAll("dialog.sheet").forEach(closeDialog);
   }
   function closeDialog(dlg) {
     if (typeof dlg.close === "function" && dlg.open) dlg.close(); else dlg.removeAttribute("open");
@@ -460,22 +463,20 @@
     toast((markWatched ? "Marked " : "Unmarked ") + changed.length + " episode" + (changed.length === 1 ? "" : "s"),
       "Undo", function () { setWatchedMany(changed, !markWatched); });
   }
+  function openBulk() {
+    $("bulk-from").value = "1";
+    $("bulk-to").value = "";
+    $("bulk-skip-filler").checked = false;
+    renderBulkSummary();
+    openDialog($("bulk-sheet"), $("bulk-to"));
+  }
   function initBulk() {
-    $("bulk-open").addEventListener("click", function () {
-      $("bulk-from").value = "1";
-      $("bulk-to").value = "";
-      $("bulk-skip-filler").checked = false;
-      renderBulkSummary();
-      openDialog($("bulk-sheet"), $("bulk-to"));
-    });
+
     ["bulk-from", "bulk-to"].forEach(function (id) { $(id).addEventListener("input", renderBulkSummary); });
     $("bulk-skip-filler").addEventListener("change", renderBulkSummary);
     $("bulk-form").addEventListener("submit", function (e) { e.preventDefault(); applyBulk(true); });
     $("bulk-unwatch").addEventListener("click", function () { applyBulk(false); });
     $("bulk-close").addEventListener("click", function () { closeDialog($("bulk-sheet")); });
-    $("bulk-sheet").addEventListener("click", function (e) {
-      if (e.target === $("bulk-sheet")) closeDialog($("bulk-sheet"));
-    });
   }
 
   // ---------- Skip-filler guide ----------
@@ -489,7 +490,8 @@
 
     $("guide-watch-count").textContent = watch.length;
     $("guide-skip-count").textContent = skip.length;
-    $("guide-time-saved").textContent = "~" + formatDuration(skip.length * MINUTES_PER_EPISODE);
+    var saved = skip.length * MINUTES_PER_EPISODE; // compact so it fits its box: "~34h 30m"
+    $("guide-time-saved").textContent = "~" + Math.floor(saved / 60) + "h" + (saved % 60 ? " " + (saved % 60) + "m" : "");
     $("guide-watch-time").textContent =
       "Watching " + watch.length + " of " + TOTAL + " episodes takes about " +
       formatDuration(watch.length * MINUTES_PER_EPISODE) + " instead of " +
@@ -517,33 +519,25 @@
     });
   }
 
-  // ---------- Tabs ----------
-  var tabs = [
-    { id: "episodes", tab: $("tab-episodes"), panel: $("panel-episodes") },
-    { id: "guide", tab: $("tab-guide"), panel: $("panel-guide") }
-  ];
-  function selectTab(id, focus) {
-    tabs.forEach(function (t) {
-      var on = t.id === id;
-      t.tab.setAttribute("aria-selected", String(on));
-      t.tab.tabIndex = on ? 0 : -1;
-      t.panel.hidden = !on;
-      if (on && focus) t.tab.focus();
+  // ---------- Menu and sheets ----------
+  function initSheets() {
+    document.querySelectorAll("dialog.sheet").forEach(function (dlg) {
+      dlg.addEventListener("click", function (e) { if (e.target === dlg) closeDialog(dlg); }); // backdrop
+      dlg.querySelectorAll("[data-close]").forEach(function (b) {
+        b.addEventListener("click", function () { closeDialog(dlg); });
+      });
     });
-    prefs.tab = id;
-    savePrefs();
+    $("menu-open").addEventListener("click", function () {
+      showResetConfirm(false, true);
+      openDialog($("menu-sheet"));
+    });
+    $("menu-bulk").addEventListener("click", openBulk);
+    $("menu-guide").addEventListener("click", function () { openDialog($("guide-sheet")); });
+    $("menu-sync").addEventListener("click", openSyncSheet);
+    $("sync-chip").addEventListener("click", openSyncSheet);
+    $("invite-banner").addEventListener("click", openSyncSheet);
   }
-  tabs.forEach(function (t, idx) {
-    t.tab.addEventListener("click", function () {
-      if (prefs.tab !== t.id) { selectTab(t.id); window.scrollTo(0, 0); }
-    });
-    t.tab.addEventListener("keydown", function (e) {
-      if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-      var next = tabs[(idx + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
-      selectTab(next.id, true);
-      e.preventDefault();
-    });
-  });
+  function openSyncSheet() { openDialog($("sync-sheet")); }
 
   // ---------- Shared list (Firebase) ----------
   // The sync code itself lives in sync.js and is loaded only when a shared list is in use.
@@ -633,10 +627,14 @@
     offline: "Offline · will sync later",
     error: "Problem"
   };
+  var CHIP_TEXT = { connecting: "Connecting…", synced: "Shared", saving: "Saving…", offline: "Offline", error: "Sync problem" };
   function setSyncStatus(state, message) {
     var el = $("sync-status");
     el.dataset.state = state;
     el.textContent = STATUS_TEXT[state] || state;
+    $("sync-chip").dataset.state = state;
+    $("sync-chip").textContent = CHIP_TEXT[state] || state;
+    $("menu-sync-status").textContent = STATUS_TEXT[state] === "Offline · will sync later" ? "Offline" : (STATUS_TEXT[state] || "On");
     showSyncMessage(state === "error" ? message : "");
   }
   function showSyncMessage(msg, isInfo) {
@@ -660,6 +658,9 @@
     $("sync-setup").hidden = !available || inRoom || inviting;
     $("sync-connected").hidden = !inRoom || inviting;
     $("sync-status").hidden = !inRoom;
+    $("sync-chip").hidden = !inRoom;
+    $("invite-banner").hidden = !inviting;
+    if (!inRoom) $("menu-sync-status").textContent = !available ? "Not set up" : inviting ? "Invited" : "Off";
     if (inRoom) $("sync-code-display").textContent = prettyCode(sync.roomId);
     if (inviting) {
       $("sync-invite-text").textContent = (sync.roomId ? "Switch to the shared list " : "Join the shared list ") +
@@ -770,8 +771,9 @@
     if (!ROOM_RE.test(code)) { toast("That invite link isn't valid"); return; }
     if (code === sync.roomId) { toast("You're already on this shared list"); return; }
     sync.inviteRoom = code;
-    selectTab("episodes");
-    if (platform.mobile && !isInstalled() && syncAvailable()) openInstallSheet(code);
+    if (!syncAvailable()) return;
+    if (platform.mobile && !isInstalled()) openInstallSheet(code);
+    else openSyncSheet();
   }
 
   function acceptInvite(code) {
@@ -876,7 +878,7 @@
       applyFilters();
     });
 
-    selectTab(prefs.tab === "guide" ? "guide" : "episodes");
+    initSheets();
     applyFilters();
     updateProgress();
     renderGuide();
@@ -908,7 +910,7 @@
     if (location.protocol === "file:" || isInstalled()) return false;
     return platform.mobile || !!installPrompt || platform.macSafari || platform.chromium;
   }
-  function updateGetApp() { $("get-app").hidden = !canOfferInstall(); }
+  function updateGetApp() { $("menu-get-app").hidden = !canOfferInstall(); }
 
   var ICON = {
     share: '<svg class="inline-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M7 10H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-1"/></svg>',
@@ -1013,7 +1015,7 @@
       updateGetApp();
       toast("Installed! Open Naruto Filler from your home screen.");
     });
-    $("get-app").addEventListener("click", function () {
+    $("menu-get-app").addEventListener("click", function () {
       if (installPrompt && !platform.mobile) { $("install-native").click(); return; }
       openInstallSheet(sync.inviteRoom);
     });
