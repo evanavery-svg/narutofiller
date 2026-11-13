@@ -117,6 +117,27 @@ button:disabled { opacity: 0.4; cursor: default; }
 
 .footnote { margin: 0; font-size: 13px; line-height: 1.4; color: var(--secondary); letter-spacing: 0; }
 
+/* ---------- Startup animation: the eye opens, the tomoe spin down, then you fly through it ---------- */
+.splash {
+  position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; cursor: pointer;
+  background: var(--bg);
+  animation: splash-out 0.5s 1.5s ease-in forwards;
+}
+.no-splash .splash { display: none; }
+.sharingan {
+  width: min(46vw, 200px); height: auto; overflow: visible;
+  filter: drop-shadow(0 0 28px rgba(208, 16, 31, 0.55));
+  animation: eye-open 0.4s cubic-bezier(.3, 1.3, .5, 1) backwards, eye-through 0.5s 1.5s cubic-bezier(.6, 0, .9, .4) forwards;
+}
+.sharingan-tomoe { transform-origin: 100px 100px; animation: tomoe-spin 1.25s 0.2s cubic-bezier(.1, .75, .2, 1) backwards; }
+.sharingan-pupil { transform-origin: 100px 100px; animation: pupil-pulse 0.35s 1.2s ease-in-out; }
+@keyframes eye-open { from { clip-path: ellipse(60% 0% at 50% 50%); opacity: 0; } to { clip-path: ellipse(60% 60% at 50% 50%); opacity: 1; } }
+@keyframes tomoe-spin { from { transform: rotate(900deg); } to { transform: rotate(0deg); } }
+@keyframes pupil-pulse { 50% { transform: scale(1.35); } }
+@keyframes eye-through { to { transform: scale(9); opacity: 0; } }
+@keyframes splash-out { to { opacity: 0; visibility: hidden; } }
+.splash.skip { animation: splash-out 0.2s ease-out forwards; }
+
 /* ---------- Header ---------- */
 .top-inner {
   max-width: 680px; margin: 0 auto;
@@ -807,5 +828,6 @@ label.row { cursor: pointer; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .splash { display: none; }
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }

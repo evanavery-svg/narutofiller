@@ -30,9 +30,41 @@
   <script>
     document.documentElement.classList.add("js-loading");
     setTimeout(function () { document.documentElement.classList.remove("js-loading"); }, 3000);
+    // Startup animation: once per app launch (not on reloads), unless it's switched off
+    (function () {
+      var skip = false;
+      try {
+        skip = !!window.NF_NO_SPLASH || !!sessionStorage.getItem("naruto-filler:splashed") ||
+          (window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches);
+        if (!skip && JSON.parse(localStorage.getItem("naruto-filler:prefs:v1") || "{}").splash === false) skip = true;
+        sessionStorage.setItem("naruto-filler:splashed", "1");
+      } catch (e) { /* storage unavailable: just play it */ }
+      if (skip) document.documentElement.classList.add("no-splash");
+      window.NF_SPLASH_START = Date.now();
+    })();
   </script>
 </head>
 <body>
+  <!-- Startup animation (drawn here, not an image). Tap to skip. -->
+  <div id="splash" class="splash" aria-hidden="true">
+    <svg class="sharingan" viewBox="0 0 200 200" width="200" height="200">
+      <defs>
+        <radialGradient id="sharingan-red" cx="50%" cy="45%" r="60%">
+          <stop offset="0" stop-color="#ff3b3b"/><stop offset="0.55" stop-color="#d0101f"/><stop offset="1" stop-color="#7d0610"/>
+        </radialGradient>
+      </defs>
+      <circle cx="100" cy="100" r="92" fill="url(#sharingan-red)" stroke="#140305" stroke-width="9"/>
+      <circle cx="100" cy="100" r="50" fill="none" stroke="#3a0509" stroke-width="2.5" opacity="0.7"/>
+      <g class="sharingan-tomoe" fill="#0c0406">
+          <g transform="rotate(0 100 100)"><g><circle cx="100" cy="50" r="12.5"/><path d="M95.6 37.7 Q125.8 36.0 141.0 57.6 Q122.4 49.8 109.2 60.1 Z"/></g></g>
+          <g transform="rotate(120 100 100)"><g><circle cx="100" cy="50" r="12.5"/><path d="M95.6 37.7 Q125.8 36.0 141.0 57.6 Q122.4 49.8 109.2 60.1 Z"/></g></g>
+          <g transform="rotate(240 100 100)"><g><circle cx="100" cy="50" r="12.5"/><path d="M95.6 37.7 Q125.8 36.0 141.0 57.6 Q122.4 49.8 109.2 60.1 Z"/></g></g>
+      </g>
+      <circle class="sharingan-pupil" cx="100" cy="100" r="17" fill="#0c0406"/>
+      <ellipse cx="70" cy="62" rx="20" ry="11" fill="#fff" opacity="0.16" transform="rotate(-35 70 62)"/>
+    </svg>
+  </div>
+
   <a class="skip-link" href="#main">Skip to content</a>
 
   <header class="top">
@@ -186,6 +218,10 @@
         <label class="row">
           <span class="row-label">Spoiler shield <span class="row-sub">Blur titles you haven't watched</span></span>
           <input type="checkbox" id="spoiler-shield" class="switch" role="switch">
+        </label>
+        <label class="row">
+          <span class="row-label">Startup animation</span>
+          <input type="checkbox" id="startup-animation" class="switch" role="switch">
         </label>
       </div>
 

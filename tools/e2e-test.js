@@ -21,7 +21,9 @@ const BASE = `http://localhost:${PORT}/naruto-filler/`;
 
 let failures = 0;
 // Most checks start past the first-launch "what's your name?" screen
+const noSplash = () => { window.NF_NO_SPLASH = true; }; // the startup animation is tested on its own
 const presetProfile = () => {
+  window.NF_NO_SPLASH = true;
   window.NF_NO_CELEBRATION = true; // the arc-complete screen is tested on its own
   try {
     const key = "naruto-filler:profile:v1";
@@ -89,6 +91,7 @@ const collapse = (nums) => {
       // No init script here: one that touches localStorage at document start can make headless
       // Chromium hand a reloaded file:// page an empty storage area. Use the welcome screen instead.
       const page = await browser.newPage();
+      await page.addInitScript(noSplash);
       const errors = [];
       page.on("pageerror", (e) => errors.push(e.message));
       page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
@@ -489,6 +492,7 @@ const collapse = (nums) => {
     // Finishing an arc celebrates (fresh browser, celebrations on)
     {
       const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+      await ctx.addInitScript(noSplash);
       await ctx.addInitScript(() => localStorage.setItem("naruto-filler:profile:v1", JSON.stringify({ id: "partypartypa", name: "P", asked: true })));
       const p = await ctx.newPage();
       await p.goto(BASE);
@@ -505,9 +509,45 @@ const collapse = (nums) => {
       await ctx.close();
     }
 
+    // Startup animation (fresh browser each time, nothing switched off)
+    {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+      const p = await ctx.newPage();
+      const errs = [];
+      p.on("pageerror", (e) => errs.push(e.message));
+      await p.goto(BASE);
+      check("splash: plays on launch", await p.isVisible("#splash") && (await p.locator("#splash .sharingan-tomoe > g").count()) === 3);
+      check("splash: the welcome screen waits for it", !(await p.evaluate(() => document.getElementById("welcome-sheet").open)));
+      check("splash: gone within about 2 seconds, then the welcome screen", (await waitFor(async () => (await p.locator("#splash").count()) === 0, 4000)) === true && await p.evaluate(() => document.getElementById("welcome-sheet").open));
+      check("splash: app is ready afterwards", await p.evaluate(() => document.documentElement.classList.contains("ready")));
+      await p.fill("#welcome-name", "S");
+      await p.click("#welcome-save");
+      await p.reload();
+      check("splash: doesn't replay on a reload", !(await p.isVisible("#splash")));
+      const p2 = await ctx.newPage(); // a new tab = a new launch
+      await p2.goto(BASE);
+      check("splash: plays again on the next launch", await p2.isVisible("#splash"));
+      await p2.click("#splash");
+      check("splash: tap skips it", (await waitFor(async () => (await p2.locator("#splash").count()) === 0, 1000)) === true);
+      await p2.click("#menu-open");
+      check("splash: switch in the menu is on by default", await p2.isChecked("#startup-animation"));
+      await p2.click("#startup-animation");
+      const p3 = await ctx.newPage();
+      await p3.goto(BASE);
+      check("splash: switched off, it doesn't play", !(await p3.isVisible("#splash")) && await p3.evaluate(() => document.documentElement.classList.contains("ready")));
+      check("splash: no JS errors", errs.length === 0, errs.join(" | "));
+      await ctx.close();
+      const ctxR = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block", reducedMotion: "reduce" });
+      const pR = await ctxR.newPage();
+      await pR.goto(BASE);
+      check("splash: skipped with Reduce Motion", !(await pR.isVisible("#splash")) && await pR.evaluate(() => document.getElementById("welcome-sheet").open));
+      await ctxR.close();
+    }
+
     // First launch: asks for your name (fresh browser, no saved data)
     {
       const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+      await ctx.addInitScript(noSplash);
       const p = await ctx.newPage();
       await p.goto(BASE);
       check("welcome: asks for your name on first launch", await p.evaluate(() => document.getElementById("welcome-sheet").open));
@@ -530,6 +570,7 @@ const collapse = (nums) => {
       check("pace: Mark Several doesn't count toward your pace", !(await p.textContent("#pace-text")).includes("a day"));
       await ctx.close();
       const ctx2 = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+      await ctx2.addInitScript(noSplash);
       const p2 = await ctx2.newPage();
       await p2.goto(BASE);
       await p2.click("#welcome-skip");
@@ -623,6 +664,7 @@ const collapse = (nums) => {
     const { devices } = require("playwright");
     for (const [name, dev] of [["iPhone", devices["iPhone 13"]], ["Android", devices["Pixel 7"]]]) {
       const ctx = await browser.newContext({ ...dev, serviceWorkers: "block" });
+      await ctx.addInitScript(noSplash);
       if (name === "Android") await ctx.addInitScript(presetProfile);
       const p = await ctx.newPage();
       const errs = [];

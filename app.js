@@ -56,6 +56,7 @@
     skipFillerNext: true,
     together: false,      // "We watch together": your marks count for everyone on the shared list
     shield: false,        // spoiler shield: blur titles of episodes you haven't watched
+    splash: true,         // startup animation
     arcOpen: {}           // arc sections you opened/closed yourself ("name@firstEpisode": true/false)
   };
   var storedPrefs = load(STORAGE.prefs, {}) || {};
@@ -744,6 +745,31 @@
     card.addEventListener("pointerleave", resetTilt);
   }
 
+  // ---------- Startup animation ----------
+  var SPLASH_MS = 1500; // when the fly-through starts (matches styles.css)
+  var splash = { done: false, queue: [] };
+  /** Runs fn now, or as the startup animation gives way to the app. */
+  function whenSplashDone(fn) { if (splash.done) fn(); else splash.queue.push(fn); }
+  function finishSplash() {
+    if (splash.done) return;
+    splash.done = true;
+    var q = splash.queue; splash.queue = [];
+    q.forEach(function (fn) { fn(); });
+  }
+  function initSplash() {
+    var el = $("splash");
+    if (!el || getComputedStyle(el).display === "none") { if (el) el.remove(); finishSplash(); return; }
+    var elapsed = Date.now() - (window.NF_SPLASH_START || Date.now());
+    var t1 = setTimeout(finishSplash, Math.max(0, SPLASH_MS - elapsed));
+    var t2 = setTimeout(function () { el.remove(); }, Math.max(0, SPLASH_MS + 550 - elapsed));
+    el.addEventListener("click", function () { // tap to skip
+      clearTimeout(t1); clearTimeout(t2);
+      el.classList.add("skip");
+      finishSplash();
+      setTimeout(function () { el.remove(); }, 220);
+    });
+  }
+
   // The leaf logo draws itself; tap it for a spin
   function drawLeaf(mark, duration) {
     var path = mark && mark.querySelector("path");
@@ -1228,9 +1254,9 @@
     openDialog($("welcome-sheet"), $("welcome-name"));
     drawLeaf($("welcome-sheet").querySelector(".welcome-mark"), 1600);
   }
-  /** Runs fn now, or once the welcome screen has been answered. */
+  /** Runs fn once the startup animation is over and the welcome screen (if due) is answered. */
   function afterWelcome(fn) {
-    if ($("welcome-sheet").open) welcome.queued.push(fn); else fn();
+    if (welcome.pending || $("welcome-sheet").open) welcome.queued.push(fn); else whenSplashDone(fn);
   }
   function renderName() { $("menu-name-value").textContent = profile.name || "Add"; }
   function initWelcome() {
@@ -1253,7 +1279,10 @@
     $("menu-name").addEventListener("click", function () { openWelcome(true); });
     $("sync-name").addEventListener("click", function () { openWelcome(true); });
     renderName();
-    if (!profile.asked) openWelcome(false);
+    if (!profile.asked) {
+      welcome.pending = true; // opens once the startup animation is over
+      whenSplashDone(function () { welcome.pending = false; openWelcome(false); });
+    }
   }
 
   // ---------- Mark several episodes at once ----------
@@ -1399,6 +1428,11 @@
     });
     $("restore-yes").addEventListener("click", applyRestore);
     $("celebrate-ok").addEventListener("click", function () { closeDialog($("celebrate-sheet")); });
+    $("startup-animation").checked = prefs.splash !== false;
+    $("startup-animation").addEventListener("change", function () {
+      prefs.splash = $("startup-animation").checked;
+      savePrefs();
+    });
     $("spoiler-shield").checked = !!prefs.shield;
     $("spoiler-shield").addEventListener("change", function () {
       prefs.shield = $("spoiler-shield").checked;
@@ -1853,6 +1887,7 @@
 
   // ---------- Wire up ----------
   function init() {
+    initSplash();
     buildFilters();
     buildList();
     buildMap($("guide-map"), mapCells.guide);
@@ -1911,8 +1946,10 @@
 
     if (location.protocol === "file:") $("file-note").hidden = false;
     document.documentElement.classList.remove("js-loading"); // reveal the built page
-    document.documentElement.classList.add("ready");         // entrance animations
-    initLogo();
+    whenSplashDone(function () {
+      document.documentElement.classList.add("ready");       // entrance animations
+      initLogo();
+    });
     registerServiceWorker();
   }
 

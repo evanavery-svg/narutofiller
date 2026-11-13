@@ -66,7 +66,7 @@ async function waitFor(fn, timeout = 8000) {
   async function device(name) {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
     // Each device already has a name (skips the first-launch screen)
-    await context.addInitScript(() => { window.NF_NO_CELEBRATION = true; });
+    await context.addInitScript(() => { window.NF_NO_CELEBRATION = true; window.NF_NO_SPLASH = true; });
     await context.addInitScript((who) => {
       const key = "naruto-filler:profile:v1";
       if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({ id: (who.toLowerCase() + "xxxxxxxxxxxx").slice(0, 12), name: who, asked: true }));
