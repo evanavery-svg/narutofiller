@@ -964,6 +964,7 @@
     $("celebrate-emoji").hidden = hasRank;
     $("celebrate-rank").hidden = !hasRank;
     if (hasRank) fillEmblem($("celebrate-rank"), rank);
+    $("celebrate-share").hidden = !hasRank;
     openDialog($("celebrate-sheet"), $("celebrate-ok"));
     confetti($("confetti"));
   }
@@ -1403,7 +1404,9 @@
     grid.textContent = "";
     BADGES.forEach(function (b) {
       var got = profile.badges[b.id];
-      var card = document.createElement("div");
+      var card = document.createElement(got ? "button" : "div"); // earned ones can be shared
+      if (got) card.type = "button";
+      card.dataset.id = b.id;
       card.className = "award" + (got ? " earned" : "");
       var icon = document.createElement("span"); icon.className = "award-icon"; icon.textContent = b.icon; icon.setAttribute("aria-hidden", "true");
       var name = document.createElement("span"); name.className = "award-name";
@@ -1412,8 +1415,8 @@
       if (!shown) name.classList.add("is-hidden-title");
       var desc = document.createElement("span"); desc.className = "award-desc";
       desc.textContent = got ? "Earned " + formatDate(new Date(got)) : b.desc;
-      card.setAttribute("aria-label", (shown || "Hidden arc") + ". " + (got ? "Earned " + formatDate(new Date(got)) : "Not earned yet: " + b.desc));
-      card.setAttribute("role", "img");
+      card.setAttribute("aria-label", (shown || "Hidden arc") + ". " + (got ? "Earned " + formatDate(new Date(got)) + ". Share it" : "Not earned yet: " + b.desc));
+      if (!got) card.setAttribute("role", "img");
       card.appendChild(icon); card.appendChild(name); card.appendChild(desc);
       grid.appendChild(card);
     });
@@ -1630,6 +1633,317 @@
       });
     });
     checkBadges();
+  }
+
+  // ---------- Themes ----------
+  var THEMES = [
+    { id: "naruto", name: "Naruto", sub: "Jumpsuit orange" },
+    { id: "akatsuki", name: "Akatsuki", sub: "Black and red clouds" },
+    { id: "sharingan", name: "Sharingan", sub: "Uchiha red" },
+    { id: "sand", name: "Hidden Sand", sub: "Desert gold" },
+    { id: "hyuga", name: "Hyūga", sub: "Byakugan lavender" }
+  ];
+  function themeOf(id) { return THEMES.filter(function (t) { return t.id === id; })[0] || THEMES[0]; }
+  /** Sets the theme on the page (the inline script in index.html does it before the first paint too). */
+  function applyTheme(fade) {
+    var t = themeOf(prefs.theme), root = document.documentElement;
+    if (fade && !reduceMotion()) {
+      root.classList.add("theme-fade");
+      clearTimeout(applyTheme.timer);
+      applyTheme.timer = setTimeout(function () { root.classList.remove("theme-fade"); }, 500);
+    }
+    if (t.id === "naruto") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", t.id);
+    // the browser's bar colour follows the theme's background
+    var cs = getComputedStyle(root);
+    document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) {
+      var dark = (m.getAttribute("media") || "").indexOf("dark") !== -1;
+      var v = cs.getPropertyValue(dark ? "--bg-dark" : "--bg-light").trim();
+      if (v) m.setAttribute("content", v);
+    });
+    $("menu-theme-value").textContent = t.name;
+    Array.prototype.forEach.call($("theme-list").children, function (b) {
+      b.setAttribute("aria-checked", String(b.dataset.themePreview === t.id));
+    });
+  }
+  function initThemes() {
+    var leaf = document.querySelector(".app-mark .app-leaf");
+    THEMES.forEach(function (t) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "theme-option";
+      b.setAttribute("role", "radio");
+      b.dataset.themePreview = t.id;
+      var sw = document.createElement("span");
+      sw.className = "theme-swatch";
+      sw.setAttribute("aria-hidden", "true");
+      if (leaf) sw.appendChild(leaf.cloneNode(true));
+      var name = document.createElement("span"); name.className = "theme-name"; name.textContent = t.name;
+      var sub = document.createElement("span"); sub.className = "theme-sub"; sub.textContent = t.sub;
+      b.appendChild(sw); b.appendChild(name); b.appendChild(sub);
+      b.addEventListener("click", function () {
+        if (themeOf(prefs.theme).id === t.id) return;
+        prefs.theme = t.id;
+        savePrefs();
+        applyTheme(true);
+        pop(sw);
+      });
+      $("theme-list").appendChild(b);
+    });
+    $("menu-theme").addEventListener("click", function () { openDialog($("theme-sheet")); });
+    applyTheme(false);
+  }
+
+  // ---------- Share images (1080 × 1920, story size) ----------
+  var CARD_W = 1080, CARD_H = 1920;
+  var RANK_BANDS = ["#8e8e93", "#2f5fb3", "#3f7d3a", "#2d5a3c", "#2b2b30", "#c8221d", "#e8590c"]; // as in styles.css
+  var CARD_FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+  var EMOJI_FONT = '"Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
+  var leafPath = null;
+  function leafShape() {
+    if (leafPath === null) {
+      var p = document.querySelector(".app-mark .app-leaf path");
+      try { leafPath = p && window.Path2D ? new Path2D(p.getAttribute("d")) : false; } catch (e) { leafPath = false; }
+    }
+    return leafPath;
+  }
+  function cardColors() {
+    var cs = getComputedStyle(document.documentElement), g = function (n) { return cs.getPropertyValue(n).trim(); };
+    return { accent: g("--accent"), hi: g("--accent-hi"), deep: g("--accent-deep"), on: g("--on-accent"), glass: g("--card-glass") || "rgba(255,255,255,0.35)" };
+  }
+  function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+  function font(weight, size, family) { return weight + " " + size + "px " + (family || CARD_FONT); }
+  /** Draws text centred (or from x when align is "left"), wrapped to maxW; returns the y after it. */
+  function textBlock(ctx, text, x, y, maxW, lineH, maxLines, align) {
+    ctx.textAlign = align || "center";
+    var words = String(text).split(" "), lines = [], line = "";
+    words.forEach(function (w) {
+      var test = line ? line + " " + w : w;
+      if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = w; } else line = test;
+    });
+    if (line) lines.push(line);
+    if (lines.length > maxLines) {
+      lines = lines.slice(0, maxLines);
+      var last = lines[maxLines - 1];
+      while (ctx.measureText(last + "…").width > maxW && last.length) last = last.slice(0, -1);
+      lines[maxLines - 1] = last + "…";
+    }
+    lines.forEach(function (l, i) { ctx.fillText(l, x, y + i * lineH); });
+    return y + lines.length * lineH;
+  }
+  function spaced(ctx, px) { if ("letterSpacing" in ctx) ctx.letterSpacing = px + "px"; }
+  function paintLeaf(ctx, x, y, size, color, width) {
+    var path = leafShape();
+    if (!path) return;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(size / 100, size / 100);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width * 100 / size;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.stroke(path);
+    ctx.restore();
+  }
+  function drawHeadband(ctx, cx, cy, w, rank) {
+    var bandH = w * 0.32, pw = w * 0.58, ph = w * 0.42;
+    var band = ctx.createLinearGradient(0, cy - bandH / 2, 0, cy + bandH / 2);
+    var c = RANK_BANDS[rank] || RANK_BANDS[1];
+    band.addColorStop(0, c); band.addColorStop(1, "rgba(0,0,0,0.35)");
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.25)"; ctx.shadowBlur = w * 0.06; ctx.shadowOffsetY = w * 0.02;
+    rr(ctx, cx - w / 2, cy - bandH / 2, w, bandH, bandH * 0.18); ctx.fillStyle = c; ctx.fill();
+    ctx.shadowColor = "transparent";
+    rr(ctx, cx - w / 2, cy - bandH / 2, w, bandH, bandH * 0.18); ctx.fillStyle = band; ctx.globalAlpha = 0.5; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.shadowColor = "rgba(0,0,0,0.3)"; ctx.shadowBlur = w * 0.05; ctx.shadowOffsetY = w * 0.02;
+    var plate = ctx.createLinearGradient(cx - pw / 2, cy - ph / 2, cx + pw / 2, cy + ph / 2);
+    plate.addColorStop(0, "#fbfcfd"); plate.addColorStop(0.45, "#d5dbe2"); plate.addColorStop(1, "#9aa4b0");
+    rr(ctx, cx - pw / 2, cy - ph / 2, pw, ph, ph * 0.2); ctx.fillStyle = plate; ctx.fill();
+    ctx.restore();
+    paintLeaf(ctx, cx - ph * 0.36, cy - ph * 0.36, ph * 0.72, "#3b424b", ph * 0.05);
+  }
+  /** Background, logo and link shared by every card. */
+  function drawFrame(ctx, col) {
+    var g = ctx.createRadialGradient(CARD_W, 0, 0, CARD_W, 0, CARD_H * 1.1);
+    g.addColorStop(0, col.hi); g.addColorStop(0.45, col.accent); g.addColorStop(1, col.deep);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, CARD_W, CARD_H);
+    ctx.save(); // a big faint leaf in the corner
+    ctx.globalAlpha = 0.09;
+    paintLeaf(ctx, -260, CARD_H - 900, 1100, col.on, 34);
+    ctx.restore();
+    // header: the app's mark and name
+    rr(ctx, 90, 110, 96, 96, 24); ctx.fillStyle = col.glass; ctx.fill();
+    paintLeaf(ctx, 100, 120, 76, col.on, 7);
+    ctx.fillStyle = col.on;
+    ctx.font = font(700, 46);
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText("Naruto Filler Guide", 212, 160);
+    ctx.textBaseline = "alphabetic";
+    ctx.globalAlpha = 0.8;
+    ctx.font = font(600, 36);
+    ctx.textAlign = "center";
+    ctx.fillText(appLink().replace(/^https?:\/\//, "").replace(/\/$/, ""), CARD_W / 2, CARD_H - 110);
+    ctx.globalAlpha = 1;
+  }
+  function whose() { return profile.name ? profile.name + "'s" : "My"; }
+  function drawWrappedCard(ctx, col) {
+    var d = wrappedData(), c = myCanon(), r = rankFor(c);
+    ctx.fillStyle = col.on;
+    ctx.font = font(800, 104);
+    textBlock(ctx, whose() + " Naruto", CARD_W / 2, 380, 940, 112, 2);
+    ctx.font = font(500, 40);
+    ctx.globalAlpha = 0.85;
+    ctx.fillText("So far · " + new Date().toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }), CARD_W / 2, 460);
+    ctx.globalAlpha = 1;
+    [[d.count, d.count === 1 ? "episode" : "episodes"], [d.hours, d.hours === 1 ? "hour" : "hours"], [d.days, d.days === 1 ? "day" : "days"]].forEach(function (s, i) {
+      var x = 90 + i * 310;
+      rr(ctx, x, 530, 280, 230, 36); ctx.fillStyle = col.glass; ctx.fill();
+      ctx.fillStyle = col.on;
+      ctx.font = font(800, 110);
+      ctx.fillText(String(s[0]), x + 140, 670);
+      ctx.font = font(600, 40);
+      ctx.fillText(s[1], x + 140, 728);
+    });
+    drawHeadband(ctx, CARD_W / 2, 900, 380, r);
+    ctx.fillStyle = col.on;
+    ctx.font = font(800, 76);
+    ctx.fillText(RANKS[r].name, CARD_W / 2, 1105);
+    ctx.font = font(500, 38);
+    ctx.globalAlpha = 0.85;
+    ctx.fillText(c + " canon episodes · " + plural(badgeCount(), "badge"), CARD_W / 2, 1163);
+    ctx.globalAlpha = 1;
+    var lines = [];
+    if (d.top.length) lines.push(["Top episode", "★" + ratings[d.top[0]] + "  Ep " + d.top[0] + " · " + EPISODES[d.top[0] - 1].title]);
+    if (d.arc) lines.push(["Favorite arc", d.arc.name]);
+    if (d.longest >= 2) lines.push(["Longest streak", "🔥 " + d.longest + " days in a row"]);
+    else if (d.react) lines.push(["Go-to reaction", d.react.e + " × " + d.react.count]);
+    if (!lines.length) lines.push(["Just getting started", "Believe it!"]);
+    var y = 1230;
+    lines.slice(0, 3).forEach(function (l) {
+      rr(ctx, 90, y, 900, 150, 32); ctx.fillStyle = col.glass; ctx.fill();
+      ctx.fillStyle = col.on;
+      ctx.font = font(700, 30);
+      ctx.textAlign = "left";
+      spaced(ctx, 3);
+      ctx.fillText(l[0].toUpperCase(), 140, y + 54);
+      spaced(ctx, 0);
+      ctx.textAlign = "left";
+      ctx.font = font(600, 44) + ", " + EMOJI_FONT;
+      textBlock(ctx, l[1], 140, y + 112, 800, 50, 1, "left");
+      ctx.textAlign = "center";
+      y += 170;
+    });
+  }
+  function drawRankCard(ctx, col) {
+    var c = myCanon(), r = rankFor(c), next = RANKS[r + 1];
+    drawHeadband(ctx, CARD_W / 2, 760, 700, r);
+    ctx.fillStyle = col.on;
+    ctx.font = font(700, 44);
+    spaced(ctx, 8);
+    ctx.globalAlpha = 0.85;
+    ctx.fillText((whose() + " rank").toUpperCase(), CARD_W / 2, 1130);
+    ctx.globalAlpha = 1;
+    spaced(ctx, 0);
+    ctx.font = font(800, 160);
+    textBlock(ctx, RANKS[r].name, CARD_W / 2, 1290, 960, 160, 1);
+    ctx.font = font(600, 48);
+    ctx.fillText(c + " of " + canonEpisodes.length + " canon episodes watched", CARD_W / 2, 1390);
+    var pct = next ? (c - RANKS[r].at) / (next.at - RANKS[r].at) : 1;
+    rr(ctx, 160, 1450, 760, 30, 15); ctx.fillStyle = col.glass; ctx.fill();
+    rr(ctx, 160, 1450, Math.max(30, 760 * pct), 30, 15); ctx.fillStyle = col.on; ctx.fill();
+    ctx.font = font(500, 40);
+    ctx.globalAlpha = 0.85;
+    ctx.fillText(next ? "Next: " + next.name + " at " + next.at : "The highest rank. Believe it!", CARD_W / 2, 1550);
+    ctx.globalAlpha = 1;
+  }
+  function drawBadgeCard(ctx, col, b) {
+    ctx.beginPath(); ctx.arc(CARD_W / 2, 780, 300, 0, Math.PI * 2); ctx.fillStyle = col.glass; ctx.fill();
+    ctx.font = font(400, 330, EMOJI_FONT);
+    ctx.fillStyle = "#000"; // emoji keep their own colours but take the fill's transparency
+    ctx.textBaseline = "middle";
+    ctx.fillText(b.icon, CARD_W / 2, 800);
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = col.on;
+    ctx.font = font(700, 44);
+    spaced(ctx, 8);
+    ctx.globalAlpha = 0.85;
+    ctx.fillText("BADGE EARNED", CARD_W / 2, 1210);
+    ctx.globalAlpha = 1;
+    spaced(ctx, 0);
+    ctx.font = font(800, 120);
+    var y = textBlock(ctx, b.name, CARD_W / 2, 1350, 940, 124, 2);
+    ctx.font = font(500, 48);
+    y = textBlock(ctx, b.desc, CARD_W / 2, y + 10, 900, 60, 2);
+    ctx.font = font(600, 40);
+    ctx.globalAlpha = 0.85;
+    var got = profile.badges[b.id];
+    ctx.fillText((profile.name ? profile.name + " · " : "") + RANKS[myRank()].name + (got ? " · " + formatDate(new Date(got)) : ""), CARD_W / 2, y + 40);
+    ctx.globalAlpha = 1;
+  }
+  var share = { blob: null, url: "", file: "" };
+  /** Draws a card ("wrapped", "rank" or a badge) and shows it with Share and Save buttons. */
+  function shareImage(kind, badge) {
+    var canvas = document.createElement("canvas");
+    canvas.width = CARD_W;
+    canvas.height = CARD_H;
+    var ctx = canvas.getContext("2d"), col = cardColors();
+    drawFrame(ctx, col);
+    ctx.textAlign = "center";
+    if (kind === "wrapped") drawWrappedCard(ctx, col);
+    else if (kind === "rank") drawRankCard(ctx, col);
+    else drawBadgeCard(ctx, col, badge);
+    var title = kind === "wrapped" ? "Share Your Wrapped" : kind === "rank" ? "Share Your Rank" : "Share Badge";
+    share.file = "naruto-" + (kind === "badge" ? "badge-" + badge.id : kind) + ".png";
+    share.text = kind === "wrapped" ? whose() + " Naruto so far" : kind === "rank" ? "I'm " + (/^[AEIOU]/.test(RANKS[myRank()].name) ? "an " : "a ") + RANKS[myRank()].name + " in Naruto!" : "Badge earned: " + badge.name;
+    canvas.toBlob(function (blob) {
+      if (!blob) { toast("Couldn't make the image"); return; }
+      if (share.url) URL.revokeObjectURL(share.url);
+      share.blob = blob;
+      share.url = URL.createObjectURL(blob);
+      $("share-img").src = share.url;
+      $("share-img").alt = share.text;
+      $("share-title").textContent = title;
+      var canShare = false;
+      try { canShare = !!(navigator.canShare && window.File && navigator.canShare({ files: [new File([blob], share.file, { type: "image/png" })] })); } catch (e) { canShare = false; }
+      $("share-send").hidden = !canShare;
+      $("share-save").className = canShare ? "button-plain" : "button-filled";
+      openDialog($("share-sheet"), canShare ? $("share-send") : $("share-save"));
+    }, "image/png");
+  }
+  function initShare() {
+    $("share-send").addEventListener("click", function () {
+      if (!share.blob) return;
+      var f = new File([share.blob], share.file, { type: "image/png" });
+      navigator.share({ files: [f], title: "Naruto Filler Guide", text: share.text }).catch(function (err) {
+        if (err && err.name !== "AbortError") toast("Couldn't share. Try Save Image instead.");
+      });
+    });
+    $("share-save").addEventListener("click", function () {
+      if (!share.url) return;
+      var a = document.createElement("a");
+      a.href = share.url;
+      a.download = share.file;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      toast("Image saved");
+    });
+    $("wrapped-image").addEventListener("click", function () { shareImage("wrapped"); });
+    $("rank-share").addEventListener("click", function () { shareImage("rank"); });
+    $("celebrate-share").addEventListener("click", function () { shareImage("rank"); });
+    $("award-grid").addEventListener("click", function (e) {
+      var card = e.target.closest(".award.earned");
+      if (card) shareImage("badge", BADGES.filter(function (b) { return b.id === card.dataset.id; })[0]);
+    });
   }
 
   // ---------- Backup ----------
@@ -2768,6 +3082,8 @@
     initEpSheet();
     initCalendar();
     initExtras();
+    initThemes();
+    initShare();
     applyShield();
     initInstall();
     initWelcome();

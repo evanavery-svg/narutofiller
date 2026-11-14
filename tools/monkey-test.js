@@ -115,10 +115,12 @@ const int = (lo, hi) => lo + Math.floor(rnd() * (hi - lo + 1));
     plan: async () => { await closeAll(); await p.click("#plan-open"); const m = pick([30, 45, 60, 90, 120, 180]); await p.click(`#plan-times [data-min="${m}"]`); if (int(0, 1) && await p.isVisible("#plan-done")) { await p.click("#plan-done"); await p.waitForTimeout(50); return "plan " + m + " marked"; } await p.keyboard.press("Escape"); return "plan " + m; },
     rankSheet: async () => { await closeAll(); if (int(0, 1)) await p.click("#rank-chip"); else { await p.click("#menu-open"); await p.click("#menu-rank"); } await p.keyboard.press("Escape"); return "rank sheet"; },
     songs: async () => { await closeAll(); await p.click("#menu-open"); await p.click("#menu-songs"); if (int(0, 1)) { const k = pick(["op", "ed"]); const c = await p.locator(`#${k}-list .song-main`).count(); await p.locator(`#${k}-list .song-main`).nth(int(0, c - 1)).click(); return "song jump"; } await p.keyboard.press("Escape"); return "songs"; },
+    theme: async () => { await closeAll(); await p.click("#menu-open"); await p.click("#menu-theme"); const t = pick(["naruto", "akatsuki", "sharingan", "sand", "hyuga"]); await p.click(`#theme-list [data-theme-preview="${t}"]`); await p.keyboard.press("Escape"); return "theme " + t; },
+    shareImage: async () => { await closeAll(); const how = int(0, 2); if (how === 0) { await p.click("#menu-open"); await p.click("#menu-wrapped"); await p.click("#wrapped-image"); } else { await p.click("#rank-chip"); if (how === 1 || !(await p.locator("#award-grid button.award").count())) await p.click("#rank-share"); else await p.locator("#award-grid button.award").first().click(); } await p.waitForFunction(() => document.getElementById("share-sheet").open, null, { timeout: 3000 }); await p.keyboard.press("Escape"); return "share image " + how; },
     wrapped: async () => { await closeAll(); await p.click("#menu-open"); await p.click(pick(["#menu-wrapped", "#menu-top"])); await p.keyboard.press("Escape"); return "wrapped/top"; },
   };
   const names = Object.keys(actions);
-  const weights = { tickRandom: 6, deckWatch: 5, deckSkip: 2, undo: 3, filter: 2, search: 2, menuSwitch: 2, bulk: 2, rate: 3, rateBar: 2, arc: 2, guideJump: 1, reset: 1, reload: 1, wrapped: 1, note: 2, calendar: 1, plan: 1, rankSheet: 1, songs: 1 };
+  const weights = { tickRandom: 6, deckWatch: 5, deckSkip: 2, undo: 3, filter: 2, search: 2, menuSwitch: 2, bulk: 2, rate: 3, rateBar: 2, arc: 2, guideJump: 1, reset: 1, reload: 1, wrapped: 1, note: 2, calendar: 1, plan: 1, rankSheet: 1, songs: 1, theme: 1, shareImage: 1 };
   const bag = names.flatMap((n) => Array(weights[n]).fill(n));
   for (let i = 0; i < STEPS; i++) {
     const name = pick(bag);

@@ -19,6 +19,7 @@ To keep things simple, the site sorts episodes into just two categories:
   - The main screen has your progress, the **up-next card**, search, the **All / Canon / Filler** control and the episode list grouped by arc.
   - Everything else is in the **⋯** menu at the top right: Mark Several Episodes, the Skip-Filler Guide, Watch Together, Get the App, the two settings, Reset Progress, and where the data comes from.
 - **Light and dark mode.** These follow the phone or computer's own setting automatically.
+- **Themes** (**⋯ → Theme**). **Naruto** (orange), **Akatsuki** (red, with faint red clouds), **Sharingan** (deep red, with faint tomoe), **Hidden Sand** (desert gold, with faint dunes) and **Hyūga** (lavender). A theme changes the accent color, the background tint, the logo, the Wrapped card and the share images, in both light and dark mode, and fades in when you switch. Each theme's text colors were checked for at least 4.5:1 contrast. The theme is saved on the device and applied before the page first draws, so there's no flash of orange.
 - **Animations.** They're all CSS or small bits of JavaScript, with no libraries, and they switch off when the device's **Reduce Motion** setting is on.
   - **Up-next card:** a "WATCHED" or "SKIPPED" stamp lands on the card, the card flies off, the cards behind step forward, and a glint sweeps across the new one. With a mouse, the card tilts toward the pointer and catches the light.
   - **Ticking an episode:** the check draws itself and a ring bursts out. The progress bar springs forward with a sheen, and the number bumps.
@@ -79,6 +80,7 @@ To keep things simple, the site sorts episodes into just two categories:
   - your top-rated episodes and favorite arc (your best-rated, or the one you watched most)
   - your longest streak, biggest binge (most episodes in one day) and go-to reaction
   - on a shared list, how many ratings you agree on with each person, and your biggest debate
+- **Share images.** **Share Image** on Wrapped, **Share My Rank** in Rank & Badges, tapping an earned badge, or **Share** on a rank-up celebration makes a 1080 × 1920 picture (the size of an Instagram or iMessage story) in your theme's colors: your stats with your headband, your rank with progress to the next one, or the badge. A preview opens with **Share** (the phone's share sheet, where the device can share images) and **Save Image**. Wrapped can still share as text too.
 - **Backup** (**⋯ → Save a Backup / Restore from Backup**). Saves your progress (with the dates, for the calendar), skips, ratings, favorites, notes and name to a `.json` file, and restores it later. Restoring asks first, and on a shared list your restored progress syncs.
 - **Partner activity.** While you share a list, a small line under your progress shows what the other person watched last ("Sara watched Ep 45 · 2h ago"). Tap it to open that episode.
 - **The race.** On a shared list, bars under your progress compare everyone's canon episodes ("Sara is 3 canon episodes ahead"). Tap it for everyone's rank.
@@ -419,6 +421,8 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
   - badges stay earned after unticking, and with the shield on, unstarted arcs' badges hide their names
 - **Plan Tonight:** 1 hour is 2 episodes and 2 hours is 5, it says when you'll be done, marking them counts toward today's streak (one at a time), **Undo** works, and it remembers the time you picked.
 - **Theme songs:** the card flags a new opening, details show the opening and ending, the list has 9 openings and 15 endings with the current ones marked, ▶ links to a YouTube search, and tapping a song jumps to its first episode.
+- **Themes:** Naruto by default; picking Akatsuki recolors the app, adds the pattern, changes the browser bar color and updates the menu; it's kept after a reload; and switching back to Naruto restores everything.
+- **Share images:** Wrapped, rank and badge cards are 1080 × 1920 and use the theme's colors; **Share** appears only where the device can share images; **Save Image** downloads a PNG; only earned badges are buttons; and a rank-up celebration offers **Share**.
 - **Naruto Wrapped:** the stats, top episode and favorite arc.
 - **Backup:**
   - the saved file contains progress, ratings, favorites and notes
@@ -447,7 +451,7 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
 
 - **Sharing switched off:** the card explains that sharing isn't set up (or, on `file://`, that it needs the hosted site).
 
-`node tools/monkey-test.js [seed] [steps]` does hundreds of random actions against a local server (`python3 -m http.server 8000`) and checks after each one that the screen matches the saved data. It also leaves random reactions and notes, opens the calendar, rank and song lists, plans tonight, and checks that the rank matches the canon count. Twenty-four runs of 200–250 steps each found no mismatches and no JavaScript errors.
+`node tools/monkey-test.js [seed] [steps]` does hundreds of random actions against a local server (`python3 -m http.server 8000`) and checks after each one that the screen matches the saved data. It also leaves random reactions and notes, opens the calendar, rank and song lists, plans tonight, switches themes, makes share images, and checks that the rank matches the canon count. Twenty-seven runs of 200–250 steps each found no mismatches and no JavaScript errors.
 
 **Speed.** Measured with the CPU slowed 4× (roughly a mid-range phone), every tap responds in under about 100 ms. Typing in search went from 360 ms to 80 ms, and opening the Skip-Filler Guide from 232 ms to 64 ms. What makes the difference:
 - Rows animate only when an arc unfolds, not whenever a filter or search shows them again.
@@ -495,7 +499,7 @@ It checks:
 - **Leave:** stopping sharing, and staying left after a reload.
 - **Security rules:** listing rooms, malformed codes, unexpected fields, deletes, and other collections are all refused.
 
-The last runs passed all 276 checks in `e2e-test.js` and all 78 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 95** in light mode (performance was 97–99 before the startup animation, which covers the first two seconds), and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
+The last runs passed all 291 checks in `e2e-test.js` and all 78 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 95** in light mode (performance was 97–99 before the startup animation, which covers the first two seconds), and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
 
 ## Legal
 

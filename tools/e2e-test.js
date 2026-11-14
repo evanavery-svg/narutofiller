@@ -522,6 +522,64 @@ const collapse = (nums) => {
     check("notes: Wrapped shows your go-to reaction", (await page.textContent("#wrapped-details")).includes("Go-to reaction") && (await page.textContent("#wrapped-details")).includes("😭"));
     await closeSheets();
 
+    // Themes
+    await openMenu();
+    check("theme: the menu shows Naruto by default", (await page.textContent("#menu-theme-value")) === "Naruto" && !(await page.evaluate(() => document.documentElement.hasAttribute("data-theme"))));
+    await page.click("#menu-theme");
+    check("theme: five themes, Naruto selected", (await page.locator("#theme-list .theme-option").count()) === 5 && (await page.getAttribute('#theme-list [data-theme-preview="naruto"]', "aria-checked")) === "true");
+    await page.click('#theme-list [data-theme-preview="akatsuki"]');
+    const accentNow = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--accent").trim());
+    check("theme: Akatsuki recolors the app", (await page.getAttribute("html", "data-theme")) === "akatsuki" && (await accentNow()) === "#d42a35" &&
+      (await page.evaluate(() => getComputedStyle(document.body).backgroundImage)).startsWith('url("data:image/svg+xml'));
+    check("theme: the browser bar color follows", (await page.getAttribute('meta[name="theme-color"][media*="light"]', "content")) === "#f4f1f1");
+    check("theme: the picker and menu show it", (await page.getAttribute('#theme-list [data-theme-preview="akatsuki"]', "aria-checked")) === "true" && (await page.textContent("#menu-theme-value")) === "Akatsuki");
+    await page.reload();
+    check("theme: kept after a reload (set before the first paint)", (await page.getAttribute("html", "data-theme")) === "akatsuki" && (await accentNow()) === "#d42a35");
+
+    // Share images (with the Akatsuki theme on)
+    const imageInfo = () => page.evaluate(async () => {
+      const img = document.getElementById("share-img");
+      await img.decode();
+      const c = document.createElement("canvas");
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const ctx = c.getContext("2d");
+      ctx.drawImage(img, 0, 0);
+      const [r, g, b] = ctx.getImageData(1000, 40, 1, 1).data;
+      return { w: img.naturalWidth, h: img.naturalHeight, r, g, b };
+    });
+    await openMenu();
+    await page.click("#menu-wrapped");
+    await page.click("#wrapped-image");
+    await waitFor(() => isOpen("share-sheet"), 3000);
+    let info = await imageInfo();
+    check("share: Wrapped makes a 1080×1920 image", info.w === 1080 && info.h === 1920 && (await page.textContent("#share-title")) === "Share Your Wrapped", JSON.stringify(info));
+    check("share: the image uses the theme's colors", info.r > 150 && info.g < 90, JSON.stringify(info));
+    const canFileShare = await page.evaluate(() => !!(navigator.canShare && navigator.canShare({ files: [new File(["x"], "x.png", { type: "image/png" })] })));
+    check("share: Share shows only where the device can share images", (await page.isVisible("#share-send")) === canFileShare);
+    const [img] = await Promise.all([page.waitForEvent("download"), page.click("#share-save")]);
+    const imgPath = path.join(tmp, "share.png");
+    await img.saveAs(imgPath);
+    check("share: Save Image downloads a PNG", img.suggestedFilename() === "naruto-wrapped.png" && fs.readFileSync(imgPath).subarray(1, 4).toString() === "PNG");
+    await closeSheets();
+    await page.click("#rank-chip");
+    await page.click("#rank-share");
+    await waitFor(() => isOpen("share-sheet"), 3000);
+    info = await imageInfo();
+    check("share: the rank card", (await page.textContent("#share-title")) === "Share Your Rank" && info.w === 1080);
+    await closeSheets();
+    await page.click("#rank-chip");
+    const earnedBadge = page.locator("#award-grid button.award.earned").first();
+    check("share: earned badges are buttons, the rest aren't", (await page.locator("#award-grid button.award").count()) === (await page.locator("#award-grid .award.earned").count()) && (await page.locator("#award-grid .award.earned").count()) > 0);
+    await earnedBadge.click();
+    await waitFor(() => isOpen("share-sheet"), 3000);
+    check("share: tapping an earned badge makes its card", (await page.textContent("#share-title")) === "Share Badge" && (await imageInfo()).h === 1920);
+    await closeSheets();
+    await openMenu();
+    await page.click("#menu-theme");
+    await page.click('#theme-list [data-theme-preview="naruto"]');
+    check("theme: back to Naruto", !(await page.evaluate(() => document.documentElement.hasAttribute("data-theme"))) && (await accentNow()) === "#f68b22" && (await page.getAttribute('meta[name="theme-color"][media*="light"]', "content")) === "#f2f2f7");
+    await closeSheets();
+
     // Backup: save, clear, restore
     await openMenu();
     const [download] = await Promise.all([page.waitForEvent("download"), page.click("#menu-export")]);
@@ -651,6 +709,7 @@ const collapse = (nums) => {
       await p.click("#deck-watch");
       check("rank: the 10th canon episode celebrates a rank up", (await waitFor(() => p.evaluate(() => document.getElementById("celebrate-sheet").open), 3000)) === true && (await p.textContent("#celebrate-title")) === "Rank up: Genin!");
       check("rank: the celebration shows the headband", await p.isVisible("#celebrate-rank .emblem-plate svg") && !(await p.isVisible("#celebrate-emoji")));
+      check("rank: the celebration offers to share it", await p.isVisible("#celebrate-share"));
       await p.click("#celebrate-ok");
       check("rank: the chip shows Genin", (await p.textContent("#rank-name")) === "Genin");
       await p.click("#rank-chip");

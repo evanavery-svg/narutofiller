@@ -40,6 +40,11 @@
         sessionStorage.setItem("naruto-filler:splashed", "1");
       } catch (e) { /* storage unavailable: just play it */ }
       if (skip) document.documentElement.classList.add("no-splash");
+      // Theme, before the first paint (no flash of the default colours)
+      try {
+        var theme = JSON.parse(localStorage.getItem("naruto-filler:prefs:v1") || "{}").theme;
+        if (/^(akatsuki|sharingan|sand|hyuga)$/.test(theme)) document.documentElement.setAttribute("data-theme", theme);
+      } catch (e) { /* storage unavailable: default theme */ }
       window.NF_SPLASH_START = Date.now();
     })();
   </script>
@@ -247,6 +252,11 @@
       </div>
 
       <div class="group">
+        <button type="button" id="menu-theme" class="row row-button">
+          <span class="row-label">Theme</span>
+          <span id="menu-theme-value" class="row-value">Naruto</span>
+          <svg class="chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
         <button type="button" id="menu-name" class="row row-button">
           <span class="row-label">Your Name</span>
           <span id="menu-name-value" class="row-value"></span>
@@ -464,6 +474,7 @@
       <h2 id="celebrate-title" class="sheet-title" tabindex="-1"></h2>
       <p id="celebrate-text" class="celebrate-text"></p>
       <button type="button" id="celebrate-ok" class="button-filled">Nice!</button>
+      <button type="button" id="celebrate-share" class="button-plain" hidden>Share</button>
     </div>
   </dialog>
 
@@ -484,7 +495,8 @@
         <div id="wrapped-details" class="wrapped-details"></div>
       </div>
       <div class="button-stack">
-        <button type="button" id="wrapped-share" class="button-filled">Share</button>
+        <button type="button" id="wrapped-image" class="button-filled">Share Image</button>
+        <button type="button" id="wrapped-share" class="button-plain">Share as Text</button>
       </div>
     </div>
   </dialog>
@@ -528,6 +540,7 @@
         <div id="rank-emblem" class="rank-emblem" aria-hidden="true"></div>
         <p id="rank-title" class="rank-title"></p>
         <p id="rank-next" class="rank-next"></p>
+        <button type="button" id="rank-share" class="button-tinted rank-share">Share My Rank</button>
         <div class="progress-track rank-track"><div id="rank-bar" class="progress-bar" role="progressbar" aria-label="Progress to the next rank" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div></div>
       </div>
       <div id="rank-ladder" class="group rank-ladder"></div>
@@ -575,6 +588,33 @@
       <h3 class="sheet-subtitle">Endings</h3>
       <div id="ed-list" class="group song-list"></div>
       <p class="footnote cal-note">Tap a song to jump to its first episode, or ▶ to find it on YouTube. Titles and artists from the Naruto Fandom wiki.</p>
+    </div>
+  </dialog>
+
+  <!-- ===== Theme ===== -->
+  <dialog id="theme-sheet" class="sheet" aria-labelledby="theme-title">
+    <div class="sheet-inner">
+      <div class="sheet-head">
+        <h2 id="theme-title" class="sheet-title" tabindex="-1">Theme</h2>
+        <button type="button" class="sheet-close" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+      <div id="theme-list" class="theme-list" role="radiogroup" aria-label="Theme"></div>
+      <p class="footnote cal-note">Themes work in light and dark mode. They change this device only.</p>
+    </div>
+  </dialog>
+
+  <!-- ===== Share an image ===== -->
+  <dialog id="share-sheet" class="sheet tall" aria-labelledby="share-title">
+    <div class="sheet-inner">
+      <div class="sheet-head">
+        <h2 id="share-title" class="sheet-title" tabindex="-1">Share</h2>
+        <button type="button" class="sheet-close" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      </div>
+      <div class="share-preview"><img id="share-img" alt=""></div>
+      <div class="button-stack">
+        <button type="button" id="share-send" class="button-filled">Share</button>
+        <button type="button" id="share-save" class="button-plain">Save Image</button>
+      </div>
     </div>
   </dialog>
 

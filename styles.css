@@ -5,10 +5,21 @@
 :root {
   color-scheme: light dark;
 
+  /* Theme colours (Naruto orange; see "Themes" below for the others) */
+  --bg-light: #f2f2f7;
+  --bg-dark: #000000;
+  --accent-text-light: #9a4d00;     /* accent for text on light backgrounds (5:1 or better everywhere) */
+  --accent-text-dark: #ffa23c;
+  --accent-rgb: 246, 139, 34;
+  --accent-hi: #ffc56b;             /* gradients (Wrapped card, logo, share images) */
+  --accent-deep: #ec7b12;
+  --pattern: none;                  /* faint background pattern */
+  --card-glass: rgba(255, 255, 255, 0.35); /* tiles on the Wrapped card */
+
   /* Light mode (iOS system colours) */
-  --bg: #f2f2f7;                    /* grouped background */
+  --bg: var(--bg-light);            /* grouped background */
   --surface: #ffffff;               /* grouped cell */
-  --sheet-bg: #f2f2f7;
+  --sheet-bg: var(--bg-light);
   --sheet-group: #ffffff;
   --label: #000000;
   --secondary: #6c6c70;             /* darker than iOS default, for readable small text */
@@ -20,9 +31,9 @@
   --material: rgba(242, 242, 247, 0.82);
 
   --accent: #f68b22;                /* Naruto's jumpsuit orange: fills */
-  --accent-text: #9a4d00;           /* orange for text on light backgrounds (5:1 or better everywhere) */
-  --on-accent: #1c1205;             /* text on orange fills */
-  --tint: rgba(246, 139, 34, 0.14); /* tinted buttons */
+  --accent-text: var(--accent-text-light);
+  --on-accent: #1c1205;             /* text on accent fills */
+  --tint: rgba(var(--accent-rgb), 0.14); /* tinted buttons */
   --green: #34c759;
   --red: #d70015;
   --canon: #34c759;        /* stripes and dots */
@@ -47,7 +58,7 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #000000;
+    --bg: var(--bg-dark);
     --surface: #1c1c1e;
     --sheet-bg: #1c1c1e;
     --sheet-group: #2c2c2e;
@@ -60,8 +71,8 @@
     --segment-on: #636366;
     --material: rgba(0, 0, 0, 0.78);
 
-    --accent-text: #ffa23c;
-    --tint: rgba(246, 139, 34, 0.18);
+    --accent-text: var(--accent-text-dark);
+    --tint: rgba(var(--accent-rgb), 0.18);
     --green: #30d158;
     --red: #ff6961;
     --canon: #30d158;
@@ -82,7 +93,7 @@ html { -webkit-text-size-adjust: 100%; scroll-padding-top: 80px; background: var
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--bg);
+  background: var(--pattern) 0 0 / auto fixed, var(--bg);
   color: var(--label);
   font-family: var(--font);
   font-size: 17px;
@@ -147,14 +158,14 @@ button:disabled { opacity: 0.4; cursor: default; }
 .app-mark {
   flex: none; display: grid; place-items: center;
   width: 32px; height: 32px; border-radius: 8px;
-  background: linear-gradient(180deg, #ffae45, var(--accent));
+  background: linear-gradient(180deg, var(--accent-hi), var(--accent));
 }
 .app-mark { cursor: pointer; }
 .app-mark.spin .app-leaf { animation: leaf-spin 0.9s cubic-bezier(.3, .1, .2, 1); }
 @keyframes leaf-spin { 40% { transform: rotate(-200deg) scale(1.15); } 100% { transform: rotate(-360deg); } }
 .app-leaf {
   width: 80%; height: 80%;
-  fill: none; stroke: #1c1205; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round;
+  fill: none; stroke: var(--on-accent); stroke-width: 7; stroke-linecap: round; stroke-linejoin: round;
 }
 .title {
   flex: 1 1 auto; min-width: 0; margin: 0; font-family: var(--font-display);
@@ -639,9 +650,9 @@ label.row { cursor: pointer; }
 
 /* ---------- Naruto Wrapped ---------- */
 .wrapped-card {
-  border-radius: 22px; padding: 20px 18px; color: #1c1205;
-  background: radial-gradient(120% 90% at 100% 0%, #ffc56b 0%, #f68b22 45%, #ec7b12 100%);
-  box-shadow: 0 16px 34px -14px rgba(194, 65, 12, 0.6);
+  border-radius: 22px; padding: 20px 18px; color: var(--on-accent);
+  background: radial-gradient(120% 90% at 100% 0%, var(--accent-hi) 0%, var(--accent) 45%, var(--accent-deep) 100%);
+  box-shadow: 0 16px 34px -14px rgba(var(--accent-rgb), 0.7);
 }
 .wrapped-card { background-size: 170% 170%; animation: wrapped-glow 5s ease-in-out infinite alternate; }
 @keyframes wrapped-glow { from { background-position: 100% 0%; } to { background-position: 0% 100%; } }
@@ -653,16 +664,16 @@ label.row { cursor: pointer; }
 .sheet[open] .wrapped-line:nth-child(3) { animation-delay: 0.71s; } .sheet[open] .wrapped-line:nth-child(4) { animation-delay: 0.79s; }
 .sheet[open] .wrapped-line:nth-child(n+5) { animation-delay: 0.87s; }
 .sheet[open] .wrapped-big { display: inline-block; animation: bounce-in 0.6s 0.45s cubic-bezier(.3, 1.5, .5, 1) backwards; }
-.wrapped-who { margin: 0 0 14px; font-family: var(--font-display); font-size: 24px; font-weight: 800; color: #1c1205; }
+.wrapped-who { margin: 0 0 14px; font-family: var(--font-display); font-size: 24px; font-weight: 800; color: var(--on-accent); }
 .wrapped-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
-.wrapped-stats > div { background: rgba(255, 255, 255, 0.35); border-radius: 14px; padding: 10px; display: flex; flex-direction: column; }
-.wrapped-big { font-family: var(--font-display); font-size: 30px; font-weight: 800; line-height: 1.1; color: #1c1205; }
-.wrapped-small { font-size: 13px; font-weight: 600; color: #1c1205; }
+.wrapped-stats > div { background: var(--card-glass); border-radius: 14px; padding: 10px; display: flex; flex-direction: column; }
+.wrapped-big { font-family: var(--font-display); font-size: 30px; font-weight: 800; line-height: 1.1; color: var(--on-accent); }
+.wrapped-small { font-size: 13px; font-weight: 600; color: var(--on-accent); }
 .wrapped-details { display: grid; gap: 6px; }
-.wrapped-line { margin: 0; display: grid; gap: 1px; padding: 8px 10px; border-radius: 12px; background: rgba(255, 255, 255, 0.35); }
-.wrapped-label { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: #1c1205; }
+.wrapped-line { margin: 0; display: grid; gap: 1px; padding: 8px 10px; border-radius: 12px; background: var(--card-glass); }
+.wrapped-label { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--on-accent); }
 .wrapped-label:empty { display: none; }
-.wrapped-value { font-size: 15px; font-weight: 600; color: #1c1205; }
+.wrapped-value { font-size: 15px; font-weight: 600; color: var(--on-accent); }
 
 /* ---------- Episode details ---------- */
 .kind-pill {
@@ -763,7 +774,7 @@ label.row { cursor: pointer; }
   animation: toast-in 0.25s ease-out;
 }
 @keyframes toast-in { from { opacity: 0; transform: translate(-50%, 8px); } }
-.toast-action { border: 0; background: none; padding: 4px 0; color: #ffa23c; font-weight: 600; font-size: 15px; }
+.toast-action { border: 0; background: none; padding: 4px 0; color: var(--accent-text-dark); font-weight: 600; font-size: 15px; }
 
 /* ---------- Sheets (dialogs) ---------- */
 .sheet {
@@ -990,6 +1001,66 @@ label.row { cursor: pointer; }
 .song-play { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; color: var(--accent-text); }
 .song-play svg { width: 18px; height: 18px; fill: currentColor; }
 .song-play:active { background: var(--fill); }
+
+/* ---------- Themes (⋯ → Theme) ----------
+ * Each sets the accent colours (fills, readable text in light and dark mode, gradients),
+ * a tinted background and a faint pattern. Contrast is 4.5:1 or better for text. */
+:root[data-theme="akatsuki"], [data-theme-preview="akatsuki"] {
+  --accent: #d42a35; --accent-rgb: 212, 42, 53; --accent-hi: #dc3340; --accent-deep: #8e0d18; --on-accent: #ffffff;
+  --accent-text-light: #b3121f; --accent-text-dark: #ff7b7b;
+  --bg-light: #f4f1f1; --bg-dark: #0a0708; --card-glass: rgba(0, 0, 0, 0.18);
+  --pattern: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27260%27 height=%27260%27%3E%3Cg fill=%27%23d42a35%27 fill-opacity=%270.085%27 stroke=%27%23d42a35%27 stroke-opacity=%270.14%27 stroke-width=%273%27%3E%3Cpath transform=%27translate(20 30)%27 d=%27M22 64c-12 0-18-7-18-14 0-8 7-14 16-13 2-11 11-18 22-17 7 1 12 4 15 9 5-5 12-7 19-5 9 3 14 10 13 18 9 1 15 8 15 15 0 6-6 9-13 9z%27/%3E%3Cpath transform=%27translate(150 150) scale(0.75)%27 d=%27M22 64c-12 0-18-7-18-14 0-8 7-14 16-13 2-11 11-18 22-17 7 1 12 4 15 9 5-5 12-7 19-5 9 3 14 10 13 18 9 1 15 8 15 15 0 6-6 9-13 9z%27/%3E%3C/g%3E%3C/svg%3E");
+}
+:root[data-theme="sharingan"], [data-theme-preview="sharingan"] {
+  --accent: #b8101c; --accent-rgb: 184, 16, 28; --accent-hi: #d32630; --accent-deep: #5c0309; --on-accent: #ffffff;
+  --accent-text-light: #a30d18; --accent-text-dark: #ff8585;
+  --bg-light: #f5f2f2; --bg-dark: #080606; --card-glass: rgba(0, 0, 0, 0.2);
+  --pattern: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27220%27 height=%27220%27%3E%3Cg fill=%27%23b8101c%27 fill-opacity=%270.08%27%3E%3Cg transform=%27translate(-10 0) scale(0.6)%27%3E%3Ccircle cx=%27100%27 cy=%2750%27 r=%2712.5%27/%3E%3Cpath d=%27M95.6 37.7 Q125.8 36.0 141.0 57.6 Q122.4 49.8 109.2 60.1 Z%27/%3E%3C/g%3E%3Cg transform=%27translate(170 100) rotate(120) scale(0.6)%27%3E%3Ccircle cx=%27100%27 cy=%2750%27 r=%2712.5%27/%3E%3Cpath d=%27M95.6 37.7 Q125.8 36.0 141.0 57.6 Q122.4 49.8 109.2 60.1 Z%27/%3E%3C/g%3E%3Cg transform=%27translate(60 210) rotate(240) scale(0.6)%27%3E%3Ccircle cx=%27100%27 cy=%2750%27 r=%2712.5%27/%3E%3Cpath d=%27M95.6 37.7 Q125.8 36.0 141.0 57.6 Q122.4 49.8 109.2 60.1 Z%27/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+:root[data-theme="sand"], [data-theme-preview="sand"] {
+  --accent: #d9a441; --accent-rgb: 217, 164, 65; --accent-hi: #f0c978; --accent-deep: #c18b2c; --on-accent: #2a1b04;
+  --accent-text-light: #7a5410; --accent-text-dark: #e8bb63;
+  --bg-light: #f6f1e7; --bg-dark: #100c06;
+  --pattern: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27200%27 height=%27120%27%3E%3Cg fill=%27none%27 stroke=%27%23c18b2c%27 stroke-opacity=%270.16%27 stroke-width=%272%27%3E%3Cpath d=%27M0 30 Q50 14 100 30 T200 30%27/%3E%3Cpath d=%27M-50 80 Q0 64 50 80 T150 80 T250 80%27/%3E%3C/g%3E%3C/svg%3E");
+}
+:root[data-theme="hyuga"], [data-theme-preview="hyuga"] {
+  --accent: #a99be6; --accent-rgb: 169, 155, 230; --accent-hi: #d3cbf7; --accent-deep: #9182dc; --on-accent: #1b1440;
+  --accent-text-light: #5543b0; --accent-text-dark: #c4b9ff;
+  --bg-light: #f3f1fa; --bg-dark: #0a0911;
+}
+[data-theme-preview="naruto"] { --accent: #f68b22; --accent-hi: #ffc56b; --accent-deep: #ec7b12; --on-accent: #1c1205; --pattern: none; }
+.theme-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 12px; }
+.theme-option {
+  display: grid; justify-items: start; gap: 2px; padding: 10px 10px 12px; text-align: left; cursor: pointer;
+  border: 0; border-radius: 16px; background: var(--sheet-group); color: var(--label);
+  box-shadow: inset 0 0 0 2px transparent; transition: box-shadow 0.2s ease;
+}
+.theme-option[aria-checked="true"] { box-shadow: inset 0 0 0 2.5px var(--accent); }
+.theme-swatch {
+  width: 100%; height: 76px; margin-bottom: 6px; display: grid; place-items: center; border-radius: 12px;
+  background: var(--pattern) center / 140px, radial-gradient(120% 120% at 100% 0%, var(--accent-hi), var(--accent) 50%, var(--accent-deep));
+}
+.theme-swatch .app-leaf { width: 44px; height: 44px; stroke: var(--on-accent); }
+.theme-swatch.pop { animation: pop 0.4s cubic-bezier(.3, 1.6, .5, 1); }
+.theme-name { font-size: 16px; font-weight: 600; }
+.theme-sub { font-size: 13px; color: var(--secondary); }
+
+/* ---------- Share images ---------- */
+.share-preview { display: grid; place-items: center; margin: 0 0 16px; }
+.share-preview img {
+  width: min(62vw, 300px); aspect-ratio: 9 / 16; border-radius: 18px; background: var(--fill);
+  box-shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.45);
+}
+.sheet[open] .share-preview img { animation: rise 0.5s 0.1s cubic-bezier(.2, .8, .2, 1) backwards; }
+.rank-share { margin-top: 8px; }
+button.award { font: inherit; color: inherit; border: 0; cursor: pointer; }
+button.award:active { transform: scale(0.97); }
+.celebrate-inner .button-plain { width: 100%; margin-top: -6px; }
+
+/* switching themes fades the colours */
+.theme-fade, .theme-fade *, .theme-fade *::before, .theme-fade *::after {
+  transition: background-color 0.45s ease, color 0.45s ease, border-color 0.45s ease, box-shadow 0.45s ease, fill 0.45s ease, stroke 0.45s ease !important;
+}
 
 @media (prefers-reduced-motion: reduce) {
   .splash { display: none; }
