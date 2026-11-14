@@ -291,6 +291,33 @@ async function waitFor(fn, timeout = 8000) {
     await A.page.click("#reset-yes");
     check("reset: clears B too", (await waitFor(async () => (await watchedOf(B.page)).length === 0, 10000)) === true, (await watchedOf(B.page)).join(","));
 
+    // The race, and the shared up-next card ("With Ana")
+    for (const D of [A, B]) { // back to separate lists, so only the shared card marks for both
+      await openSync(D.page);
+      await D.page.uncheck("#sync-together");
+      await closeSheets(D.page);
+    }
+    check("race: shown on both, neck and neck", await A.page.isVisible("#race") && (await waitFor(async () => (await A.page.textContent("#race-text")).includes("Neck and neck with Benji"), 10000)) === true, await A.page.textContent("#race-text"));
+    await tick(A.page, 1);
+    check("race: A sees it's ahead", (await waitFor(async () => (await A.page.textContent("#race-text")) === "You're 1 canon episode ahead of Benji", 10000)) === true, await A.page.textContent("#race-text"));
+    check("race: B sees Ana ahead", (await waitFor(async () => (await B.page.textContent("#race-text")) === "Ana is 1 canon episode ahead", 10000)) === true, await B.page.textContent("#race-text"));
+    check("together card: the switch shows on a shared list", await B.page.isVisible("#deck-mode") && (await B.page.textContent("#deck-mode-us")) === "With Ana");
+    check("together card: Just Me shows B's own next episode", (await B.page.textContent("#deck-num")) === "Episode 1");
+    await B.page.click("#deck-mode-us");
+    check("together card: With Ana skips what Ana has seen", (await B.page.textContent("#deck-num")) === "Episode 2" && (await B.page.textContent("#deck-label")).startsWith("Up next for all of you"));
+    check("together card: says what B still needs alone", (await B.page.textContent("#deck-hint")).includes("You still need Ep 1 on your own"), await B.page.textContent("#deck-hint"));
+    await B.page.click("#deck-watch");
+    check("together card: Watched marks it for Ana too", (await waitFor(() => A.page.isChecked("#ep-2 input"), 10000)) === true && await B.page.isChecked("#ep-2 input"));
+    await B.page.click(".toast-action");
+    check("together card: Undo takes it back for Ana too", (await waitFor(async () => !(await A.page.isChecked("#ep-2 input")), 10000)) === true && !(await B.page.isChecked("#ep-2 input")));
+    await B.page.click("#plan-open");
+    check("plan: together, it plans for both", (await B.page.textContent("#plan-note")).includes("For you and Ana") && (await B.page.locator("#plan-list .top-item").count()) === 2 && (await B.page.textContent("#plan-list")).includes("2"));
+    await B.page.click("#plan-done");
+    check("plan: marking them reaches Ana", (await waitFor(async () => same(await watchedOf(A.page), [1, 2, 3]), 10000)) === true && same(await watchedOf(B.page), [2, 3]), `A=${await watchedOf(A.page)} B=${await watchedOf(B.page)}`);
+    await B.page.click("#rank-chip");
+    check("rank: the team shows Ana's rank", await B.page.isVisible("#rank-people") && (await B.page.textContent("#rank-people-list")).includes("Ana") && (await B.page.textContent("#rank-people-list")).includes("Academy Student"));
+    await closeSheets(B.page);
+
     // Leaving stops syncing (two taps)
     await B.page.click("#sync-chip");
     check("chip: tapping it opens Watch Together", await isOpen(B.page, "sync-sheet"));

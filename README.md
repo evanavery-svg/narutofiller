@@ -58,6 +58,13 @@ To keep things simple, the site sorts episodes into just two categories:
   - **Day streak** counts the days in a row you watched something. It lasts until you miss a whole day. The 🔥 chip turns gray when you haven't watched anything yet today, so the streak is about to end.
   - Also shows your longest streak and how many days you've watched. On a shared list, everyone's streaks.
   - A day counts only for episodes marked one at a time. **Mark Several** doesn't count, since those are usually episodes you watched before using the app.
+- **Ninja rank and badges** (tap your rank next to your progress, or **⋯ → Rank & Badges**).
+  - Your rank goes up with the canon episodes you've watched: Academy Student, Genin (10), Chūnin (40), Jōnin (75), ANBU (100), Kage (120) and Hokage (all 130). Reaching a new rank with a single tick shows confetti and a forehead protector whose band color changes with each rank.
+  - 17 badges: your first episode; finishing each of the five canon arcs; 3-, 7- and 30-day streaks; 5 episodes in a day; rating 25 episodes; reacting to 10; skipping 10 filler; watching 25 filler; sharing 10 episodes with someone on your list; every canon episode; and all 220. A banner pops up when you earn one.
+  - Badges stay earned even if you unmark episodes later. With the spoiler shield on, badges for arcs you haven't started hide their names.
+  - On a shared list, **Your Team** shows everyone's rank and badge count.
+- **Plan Tonight** (the button under the up-next card, or **⋯ → Plan Tonight**). Pick how much time you have (30 minutes to 3 hours) and it lines up the next episodes that fit, at about 23 minutes each, and shows when you'll be done. It skips filler when **Skip filler when continuing** is on. **Mark All Watched** marks them one at a time, so they count toward your streak, with **Undo**.
+- **Opening and ending songs.** Each episode's details show its opening and ending ("OP 2 · Haruka Kanata"), and the up-next card flags an episode with a new one ("🎵 New opening: GO!!!"). **⋯ → Openings & Endings** lists all 9 openings and 15 endings with their artists and episodes, marks the ones playing where you are, jumps to a song's first episode when you tap it, and ▶ searches YouTube for it.
 - **Time left and finish estimate.** Under your progress: "42h 33m of canon left · about 3 a day · done with canon around Dec 20".
   - Time left counts the episodes still ahead of you, at about 23 minutes each.
   - The pace uses the episodes you've marked one at a time in the last two weeks; **Mark Several** and other bulk changes don't count.
@@ -74,6 +81,8 @@ To keep things simple, the site sorts episodes into just two categories:
   - on a shared list, how many ratings you agree on with each person, and your biggest debate
 - **Backup** (**⋯ → Save a Backup / Restore from Backup**). Saves your progress (with the dates, for the calendar), skips, ratings, favorites, notes and name to a `.json` file, and restores it later. Restoring asks first, and on a shared list your restored progress syncs.
 - **Partner activity.** While you share a list, a small line under your progress shows what the other person watched last ("Sara watched Ep 45 · 2h ago"). Tap it to open that episode.
+- **The race.** On a shared list, bars under your progress compare everyone's canon episodes ("Sara is 3 canon episodes ahead"). Tap it for everyone's rank.
+- **Just Me / With Sara.** On a shared list, a switch above the up-next card picks whose next episode it shows. **With Sara** shows the next episode none of you has watched or skipped, says which earlier ones you still need on your own, and marks it for everyone when you tap **Watched** or **Skip** (**Undo** takes it back for everyone). **Plan Tonight** follows the same switch.
 - **Who watched it.** On a shared list, everyone keeps their own progress:
   - Ticking marks an episode for you only, and **Continue** (the up-next card) follows your progress.
   - Episodes the others watched show their initial on the row.
@@ -116,7 +125,8 @@ service-worker.js     offline copy + network-first (always the newest version wh
 icons/                Hidden Leaf symbol icons (192, 512, maskable 192/512, Apple 180, favicon, SVG)
 .nojekyll             tells GitHub Pages to serve the files as they are
 tools/                optional developer scripts (not needed to run the site)
-  validate-data.js    checks there are exactly 220 episodes numbered 1–220 and prints counts per type
+  validate-data.js    checks there are exactly 220 episodes numbered 1–220, every one has an arc, and the
+                      theme songs cover 1–220 with no gaps; prints counts per type
   make-icons.js       draws the leaf logo, regenerates the icons and the logo in the page header (needs Playwright)
   e2e-test.js         end-to-end browser test (needs Playwright)
   monkey-test.js      random-action test: hundreds of random taps, checking the screen matches the saved data
@@ -253,7 +263,7 @@ From then on:
 ### Privacy and limits
 
 - **The code works like a password.** Anyone with your code or invite link can see and change that list. Nobody can browse the database to find codes: the rules block listing, and codes are random 16-character strings with about 79 bits of randomness. To revoke access, both of you **Leave**, create a new list, and optionally delete the old document under `rooms` in the Firebase console.
-- **Only watch data and first names are stored.** Each list is one document. For each person it holds the first name they entered, their watched/skipped episodes with when each changed, their star ratings, favorites, reactions and notes, and their latest episode. There are no emails or accounts.
+- **Only watch data and first names are stored.** Each list is one document. For each person it holds the first name they entered, their watched/skipped episodes with when each changed, their star ratings, favorites, reactions and notes, how many badges they have, and their latest episode. There are no emails or accounts.
 - **Free plan limits.** At the time of writing, the Spark plan's free quota for a Standard database is 50,000 document reads, 20,000 writes and 20,000 deletes per day, plus 1 GiB of storage ([current limits](https://firebase.google.com/docs/firestore/quotas)). Two people ticking episodes use a tiny fraction of that. Because the project has no billing account, it can't charge you. If a limit were ever reached, sync requests would be refused until the quota resets (daily, around midnight Pacific time), and the app would keep working on each device.
 - **Phone clocks matter.** "Most recent change wins" uses each device's clock. If a phone's clock is badly wrong, its changes might win when they shouldn't. Normal automatic phone time is fine.
 - **Optional extra lock-down.** In the [Google Cloud console](https://console.cloud.google.com/apis/credentials) for the same project, you can restrict the browser API key to your site with an HTTP referrer restriction such as `https://<username>.github.io/*`.
@@ -262,6 +272,8 @@ From then on:
 
 - **Main source:** [Anime Filler List: Naruto](https://www.animefillerlist.com/shows/naruto), retrieved 2026-11-12. Every episode's number, title and type comes from its episode table. The table also matches the summary range lists at the top of the same page exactly.
 - **Cross-check:** the [Naruto Fandom wiki](https://naruto.fandom.com/wiki/List_of_Animated_Media). Each of the 220 episode pages has an infobox field (`chapters`) listing the manga chapters the episode adapts. An episode with no chapters listed is anime-original.
+
+**Theme songs** come from the Fandom wiki too: each episode page's `opening song` and `ending song` fields (retrieved 2026-11-14), with each song's page for its Japanese title and artist. They're stored as ranges in `SONGS` at the end of `data/episodes.js`. Episode 161's page lists no songs; it falls inside the ranges the song pages give (opening 7, ending 11).
 
 **Manga chapters** for each episode also come from the Fandom wiki (each episode page's `chapters` field). The 90 filler episodes have none.
 
@@ -319,7 +331,7 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
 
 `node tools/e2e-test.js` copies the site into a `/naruto-filler/` subpath, serves it with `python3 -m http.server`, and drives it with Playwright and Chromium. It checks:
 
-- **Data:** each type's episode list matches Anime Filler List's published range lists, and every episode has an arc (`node tools/validate-data.js`).
+- **Data:** each type's episode list matches Anime Filler List's published range lists, every episode has an arc, and the openings and endings cover 1–220 (`node tools/validate-data.js`).
 - **`file://`:** the page renders, has no errors, doesn't try to register a service worker, and keeps watched episodes.
 - **All / Canon / Filler:** each option shows the right episodes, and a search with no matches shows an empty state.
 - **Search:** case-insensitive title matches, number matches, and search combined with the filler filter.
@@ -400,6 +412,13 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
   - an empty day says so, and the calendar fits a phone screen
   - nothing watched today keeps the streak but marks it at risk, and watching brings it back
   - Wrapped shows the longest streak and biggest binge
+- **Rank and badges:**
+  - 9 canon episodes is Academy Student, and the 10th from the card celebrates "Rank up: Genin!" with the headband
+  - the rank sheet shows the rank, what's next, where you are on the ladder, and 17 badges
+  - badges already earned when the app opens are saved quietly; a new one pops up above an open sheet, and tapping the banner opens Rank & Badges
+  - badges stay earned after unticking, and with the shield on, unstarted arcs' badges hide their names
+- **Plan Tonight:** 1 hour is 2 episodes and 2 hours is 5, it says when you'll be done, marking them counts toward today's streak (one at a time), **Undo** works, and it remembers the time you picked.
+- **Theme songs:** the card flags a new opening, details show the opening and ending, the list has 9 openings and 15 endings with the current ones marked, ▶ links to a YouTube search, and tapping a song jumps to its first episode.
 - **Naruto Wrapped:** the stats, top episode and favorite arc.
 - **Backup:**
   - the saved file contains progress, ratings, favorites and notes
@@ -428,7 +447,7 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
 
 - **Sharing switched off:** the card explains that sharing isn't set up (or, on `file://`, that it needs the hosted site).
 
-`node tools/monkey-test.js [seed] [steps]` does hundreds of random actions against a local server (`python3 -m http.server 8000`) and checks after each one that the screen matches the saved data. It also leaves random reactions and notes and opens the calendar. Seventeen runs of 200–250 steps each found no mismatches and no JavaScript errors.
+`node tools/monkey-test.js [seed] [steps]` does hundreds of random actions against a local server (`python3 -m http.server 8000`) and checks after each one that the screen matches the saved data. It also leaves random reactions and notes, opens the calendar, rank and song lists, plans tonight, and checks that the rank matches the canon count. Twenty-four runs of 200–250 steps each found no mismatches and no JavaScript errors.
 
 **Speed.** Measured with the CPU slowed 4× (roughly a mid-range phone), every tap responds in under about 100 ms. Typing in search went from 360 ms to 80 ms, and opening the Skip-Filler Guide from 232 ms to 64 ms. What makes the difference:
 - Rows animate only when an arc unfolds, not whenever a filter or search shows them again.
@@ -465,13 +484,18 @@ It checks:
   - ratings and favorites stay per person, and each sees the other's on the episode details
   - a name change reaches the other device
   - reactions and notes reach the other device (in the list and the details), the spoiler shield blurs a note on an episode you haven't seen, and the calendar shows everyone's streaks
+- **Race and the shared card:**
+  - the race shows on both devices and says who's ahead
+  - **With Ana** skips what Ana has seen, says what you still need on your own, and **Watched** (and **Undo**) reach Ana
+  - **Plan Tonight** plans for both and marks for both
+  - the rank sheet shows Ana's rank
   - the rules refuse lists with more than 10 people
 - **Live sync:** ticks and unticks going both ways, skipping from the up-next card (and **Undo**) reaching the other device, marking several episodes and **Undo** reaching the other device, and reset clearing the other device.
 - **Offline:** changes made offline converging with the other device's changes after reconnecting, including a change made offline just before the app was closed.
 - **Leave:** stopping sharing, and staying left after a reload.
 - **Security rules:** listing rooms, malformed codes, unexpected fields, deletes, and other collections are all refused.
 
-The last runs passed all 246 checks in `e2e-test.js` and all 66 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 95** in light mode (performance was 97–99 before the startup animation, which covers the first two seconds), and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
+The last runs passed all 276 checks in `e2e-test.js` and all 78 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 95** in light mode (performance was 97–99 before the startup animation, which covers the first two seconds), and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
 
 ## Legal
 

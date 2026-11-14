@@ -148,7 +148,7 @@ const collapse = (nums) => {
     };
 
     check("http: 220 episodes rendered", (await page.locator(".episode").count()) === 220);
-    check("http: main screen is progress, up-next card, search/switcher and list", (await page.locator("main > :not([hidden]):not(.empty-state)").count()) === 4);
+    check("http: main screen is progress, up-next card, Plan Tonight, search/switcher and list", (await page.locator("main > :not([hidden]):not(.empty-state)").count()) === 5);
     check("http: canon vs filler explained in the menu", (await page.textContent(".about")).includes("Filler"));
     check("categories: All / Canon / Filler switcher", (await page.$$eval("#filters [data-show]", (b) => b.map((x) => x.dataset.show).join(","))) === "all,canon,filler");
     check("categories: a 'mixed' episode (7) counts as canon (no Filler tag)", (await page.locator("#ep-7 .badge").count()) === 0);
@@ -530,6 +530,7 @@ const collapse = (nums) => {
     const backup = JSON.parse(fs.readFileSync(backupPath, "utf8"));
     check("backup: file has watched episodes, ratings and favorites", backup.app === "naruto-filler-guide" && backup.watched.length === watchedCount && backup.ratings["26"] === 5 && backup.favorites.includes(1), download.suggestedFilename());
     check("backup: file has your notes", backup.notes && backup.notes["26"] && backup.notes["26"].e === "😭");
+    check("backup: file has your badges", backup.badges && typeof backup.badges.first === "number");
     await openMenu();
     await page.click("#reset-button");
     await page.click("#reset-yes");
@@ -620,6 +621,96 @@ const collapse = (nums) => {
       await p.click("#menu-wrapped");
       check("calendar: Wrapped shows your longest streak and biggest binge", (await p.textContent("#wrapped-details")).includes("Longest streak") && (await p.textContent("#wrapped-details")).includes("3 episodes"));
       check("calendar: no JS errors", errs.length === 0, errs.join(" | "));
+      await ctx.close();
+    }
+
+    // Rank, badges, plan tonight and theme songs (fresh browsers)
+    {
+      const fresh = async (watchedList, opts = {}) => {
+        const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: "block" });
+        await ctx.addInitScript(noSplash);
+        await ctx.addInitScript((w) => {
+          if (localStorage.getItem("naruto-filler:profile:v1")) return;
+          localStorage.setItem("naruto-filler:profile:v1", JSON.stringify({ id: "rankrankrank", name: "R", asked: true }));
+          const t = Date.now() - 864e5 * 30;
+          localStorage.setItem("naruto-filler:watched:v1", JSON.stringify(w));
+          localStorage.setItem("naruto-filler:changed:v1", JSON.stringify(Object.fromEntries(w.map((n) => [n, t]))));
+        }, watchedList);
+        const p = await ctx.newPage();
+        const errs = [];
+        p.on("pageerror", (e) => errs.push(e.message));
+        await p.goto(BASE);
+        return { ctx, p, errs };
+      };
+      const range = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
+
+      // Rank up: 9 canon episodes watched, then the 10th from the card
+      let { ctx, p, errs } = await fresh(range(2, 10));
+      check("rank: 9 canon episodes is Academy Student", (await p.textContent("#rank-name")) === "Academy Student");
+      check("badges: ones already earned on startup are saved quietly", !(await p.isVisible("#badge-pop")) && await p.evaluate(() => !!JSON.parse(localStorage.getItem("naruto-filler:profile:v1")).badges.first));
+      await p.click("#deck-watch");
+      check("rank: the 10th canon episode celebrates a rank up", (await waitFor(() => p.evaluate(() => document.getElementById("celebrate-sheet").open), 3000)) === true && (await p.textContent("#celebrate-title")) === "Rank up: Genin!");
+      check("rank: the celebration shows the headband", await p.isVisible("#celebrate-rank .emblem-plate svg") && !(await p.isVisible("#celebrate-emoji")));
+      await p.click("#celebrate-ok");
+      check("rank: the chip shows Genin", (await p.textContent("#rank-name")) === "Genin");
+      await p.click("#rank-chip");
+      check("rank: the sheet shows the rank and what's next", (await p.textContent("#rank-title")) === "Genin" && (await p.textContent("#rank-next")) === "30 more canon episodes to Chūnin");
+      check("rank: the ladder marks where you are", (await p.locator("#rank-ladder .rank-step.current").count()) === 1 && (await p.textContent("#rank-ladder .rank-step.current")).includes("Genin"));
+      check("badges: 17 badges, 1 earned", (await p.locator("#award-grid .award").count()) === 17 && (await p.locator("#award-grid .award.earned").count()) === 1 && (await p.textContent("#badge-count")) === "1 of 17");
+      await p.evaluate(() => document.querySelectorAll("dialog[open]").forEach((d) => d.close()));
+      await p.click("#menu-open");
+      await p.click("#spoiler-shield");
+      await p.click("#menu-rank");
+      check("badges: with the shield on, unstarted arcs' badges hide their names", (await p.locator("#award-grid .award-name.is-hidden-title").count()) === 4 && !(await p.textContent("#award-grid")).includes("Konoha Crush"));
+      check("rank: no JS errors", errs.length === 0, errs.join(" | "));
+      await ctx.close();
+
+      // A new badge pops up (above any open sheet)
+      ({ ctx, p, errs } = await fresh([]));
+      await p.evaluate(() => document.querySelector("#ep-1 .ep-info").click());
+      await p.click('#ep-sheet-state [data-state="watched"]');
+      check("badges: a new one pops up", (await waitFor(() => p.isVisible("#badge-pop"), 2000)) === true && (await p.textContent("#badge-pop")).includes("First Mission"));
+      check("badges: the banner is above the open sheet", await p.evaluate(() => { const el = document.getElementById("badge-pop"); return !el.showPopover || el.matches(":popover-open"); }));
+      await p.evaluate(() => document.querySelectorAll("dialog[open]").forEach((d) => d.close()));
+      await p.click("#badge-pop");
+      check("badges: tapping it opens Rank & Badges", await p.evaluate(() => document.getElementById("rank-sheet").open) && !(await p.isVisible("#badge-pop")));
+      await p.evaluate(() => document.querySelectorAll("dialog[open]").forEach((d) => d.close()));
+      await p.click('#ep-1 input'); // untick: the badge stays
+      await p.click("#rank-chip");
+      check("badges: stay earned after unticking", (await p.locator("#award-grid .award.earned").count()) === 1);
+      await p.evaluate(() => document.querySelectorAll("dialog[open]").forEach((d) => d.close()));
+
+      // Plan tonight
+      await p.click("#plan-open");
+      check("plan: 1 hour by default is 2 episodes", (await p.getAttribute('#plan-times [data-min="60"]', "aria-checked")) === "true" && (await p.textContent("#plan-count")) === "2" && (await p.locator("#plan-list .top-item").count()) === 2);
+      check("plan: says when you'll be done", (await p.textContent("#plan-end")).startsWith("Done around"));
+      await p.click('#plan-times [data-min="120"]');
+      check("plan: 2 hours is 5 episodes", (await p.textContent("#plan-count")) === "5" && (await p.textContent("#plan-done")) === "Mark All 5 Watched");
+      await p.click("#plan-done");
+      check("plan: marks them all watched", JSON.stringify(await p.$$eval(".episode input:checked", (els) => els.map((e) => Number(e.dataset.number)))) === "[1,2,3,4,5]" && !(await p.evaluate(() => document.getElementById("plan-sheet").open)));
+      check("plan: they count toward today's streak", (await p.textContent("#streak-count")) === "1" && await p.evaluate(() => new Set(Object.values(JSON.parse(localStorage.getItem("naruto-filler:changed:v1")))).size === 5));
+      await p.click(".toast-action");
+      check("plan: Undo unmarks them", (await p.locator(".episode input:checked").count()) === 0);
+      await p.click("#plan-open");
+      check("plan: remembers the time you picked", (await p.getAttribute('#plan-times [data-min="120"]', "aria-checked")) === "true");
+      await p.evaluate(() => document.querySelectorAll("dialog[open]").forEach((d) => d.close()));
+      check("plan: no JS errors", errs.length === 0, errs.join(" | "));
+      await ctx.close();
+
+      // Theme songs
+      ({ ctx, p, errs } = await fresh(range(1, 53)));
+      check("songs: the card flags a new opening", await p.isVisible("#deck-song") && (await p.textContent("#deck-song")).includes("New opening: Kanashimi wo Yasashisa ni"), await p.textContent("#deck-num"));
+      await p.evaluate(() => document.querySelector("#ep-26 .ep-info").click());
+      check("songs: details show the opening and ending", (await p.textContent("#ep-sheet-op")) === "OP 2 · Haruka Kanata" && (await p.textContent("#ep-sheet-ed")) === "ED 2 · Harmonia");
+      await p.evaluate(() => document.querySelectorAll("dialog[open]").forEach((d) => d.close()));
+      await p.click("#menu-open");
+      await p.click("#menu-songs");
+      check("songs: 9 openings and 15 endings", (await p.locator("#op-list .song-row").count()) === 9 && (await p.locator("#ed-list .song-row").count()) === 15);
+      check("songs: marks the ones playing now", (await p.textContent("#op-list .song-row.now")).includes("Kanashimi") && (await p.textContent("#ed-list .song-row.now")).includes("Viva"));
+      check("songs: ▶ searches YouTube", (await p.getAttribute("#op-list .song-row:first-child .song-play", "href")).startsWith("https://www.youtube.com/results?search_query=Naruto%20opening%201"));
+      await p.click("#ed-list .song-row:nth-child(10) .song-main");
+      check("songs: tapping one jumps to its first episode", !(await p.evaluate(() => document.getElementById("songs-sheet").open)) && (await waitFor(() => p.evaluate(() => { const r = document.getElementById("ep-142").getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight; }), 3000)) === true);
+      check("songs: no JS errors", errs.length === 0, errs.join(" | "));
       await ctx.close();
     }
 

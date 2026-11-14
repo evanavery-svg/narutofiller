@@ -99,6 +99,7 @@
   var profile = load(STORAGE.profile, null) || {};
   if (!/^[a-z0-9]{12}$/.test(profile.id || "")) profile.id = randomId(12);
   if (typeof profile.name !== "string") profile.name = "";
+  if (!profile.badges || typeof profile.badges !== "object" || Array.isArray(profile.badges)) profile.badges = {}; // { badgeId: time earned }
   save(STORAGE.profile, profile);
   function saveProfile() { save(STORAGE.profile, profile); pushMember(); }
 
@@ -152,6 +153,7 @@
     pushMember();
     if (rows.length === TOTAL) syncRow(n - 1);
     if ($("top-sheet").open) renderTop();
+    if (badgesReady) checkBadges();
   }
 
   /** Remembers the last episode you yourself marked watched (shown to your partner). */
@@ -628,10 +630,12 @@
   function doneArcs() { return arcs.filter(arcDone); }
   /** Runs a single-episode change; celebrates any arc it finishes. */
   function withCelebration(fn) {
-    var before = doneArcs();
+    var before = doneArcs(), rankBefore = myRank();
     fn();
     var fresh = doneArcs().filter(function (a) { return before.indexOf(a) === -1 && a.numbers.some(function (n) { return watched.has(n); }); });
-    if (fresh.length) celebrate(fresh[fresh.length - 1]);
+    var rank = myRank(), up = rank > rankBefore ? rank : -1;
+    if (fresh.length) celebrate(fresh[fresh.length - 1], up);
+    else if (up !== -1) celebrateRank(up);
   }
 
   function updateArcProgress() {
@@ -697,8 +701,12 @@
     $("pace-text").hidden = !parts.length;
     $("pace-text").textContent = parts.join(" · ");
     updateStreak();
+    updateRank();
+    renderRace();
     updateArcProgress();
+    renderDeckMode();
     renderDeck();
+    checkBadges();
     if (rows.length === TOTAL && arcs[0].el) { // the arc you're up to may have changed
       var cur = currentArc();
       if (cur !== lastCurrentArc) { lastCurrentArc = cur; applyFilters(); }
@@ -720,7 +728,7 @@
   }
   function renderDeck() {
     if (deckBusy) return;
-    var eps = upcoming(3);
+    var eps = deckUpcoming(3), us = deckMode() === "us";
     var ep = eps[0];
     $("deck").dataset.count = String(eps.length);
     $("deck-card").hidden = !ep;
@@ -728,7 +736,9 @@
     $("deck-layer-1").dataset.kind = eps[1] ? kindOf(eps[1]) : "none";
     $("deck-layer-2").dataset.kind = eps[2] ? kindOf(eps[2]) : "none";
     if (!ep) {
-      $("deck-empty-text").textContent = prefs.skipFillerNext
+      $("deck-empty-text").textContent = us && nextEpisode()
+        ? "Nothing left that none of you has watched. Switch to Just Me to see your next episode."
+        : prefs.skipFillerNext
         ? "You've finished every canon episode." + (skipped.size ? " Skipped episodes are marked in the list." : "")
         : "You've been through every episode.";
       return;
@@ -742,16 +752,25 @@
     var hide = prefs.shield && !deck.revealed[ep.number];
     $("deck-card").classList.toggle("is-hidden-title", hide);
     $("deck-card").classList.toggle("is-hidden-arc", hide && !arcStarted(arcOf[ep.number - 1]));
-    $("deck-label").textContent = hide ? "Up next · tap to reveal the title" : "Up next";
-    var already = sync.roomId ? othersWho(ep.number) : [];
+    $("deck-label").textContent = (us ? "Up next for all of you" : "Up next") + (hide ? " · tap to reveal the title" : "");
+    var already = sync.roomId && !us ? othersWho(ep.number) : [];
+    // together: episodes before this one that you still need (the others have seen them)
+    var catchUp = us ? upcoming(TOTAL).filter(function (e) { return e.number < ep.number; }).map(function (e) { return e.number; }) : [];
     $("deck-hint").textContent = (kind === "filler" ? "Anime-only. Safe to skip." : "Part of the manga's story.") +
-      (already.length ? " " + nameList(already) + " already watched it." : "");
+      (already.length ? " " + nameList(already) + " already watched it." : "") +
+      (catchUp.length ? " You still need Ep " + toRanges(catchUp).map(rangeLabel).join(", ") + " on your own." : "");
+    var fresh = newSongs(ep.number);
+    $("deck-song").hidden = !fresh.length;
+    if (fresh.length) {
+      $("deck-song").textContent = "🎵 " + (fresh.length === 2 ? "New opening and ending!" : fresh[0] === "op"
+        ? "New opening: " + SONG_LIST.op[songIndex("op", ep.number)][2] : "New ending: " + SONG_LIST.ed[songIndex("ed", ep.number)][2]);
+    }
     $("deck-find").setAttribute("aria-label", "Show episode " + ep.number + " in the list");
   }
 
   /** "watched" or "skipped": the card flies off and the next one comes up. */
   function deckAct(state) {
-    var ep = nextEpisode();
+    var ep = deckUpcoming(1)[0];
     if (!ep || deckBusy) return;
     var n = ep.number, before = stateOf(n);
     var lastBefore = profile.last ? { n: profile.last.n, at: profile.last.at } : null;
@@ -763,6 +782,7 @@
       withCelebration(function () {
         setState(n, state);
         recordChanges([n]);
+        shareIfTogether([n]);
         if (state === "watched") noteWatched(n);
         updateArcProgress();
       });
@@ -780,6 +800,7 @@
       toast((state === "watched" ? "Watched" : "Skipped") + " episode " + n, "Undo", function () {
         setState(n, before);
         recordChanges([n]);
+        shareIfTogether([n]);
         syncRow(n - 1);
         if (state === "watched") { // you didn't watch it after all: put "last watched" back
           if (lastBefore) profile.last = lastBefore; else delete profile.last;
@@ -935,17 +956,27 @@
   }
 
   // ---------- Arc complete! ----------
-  function celebrate(a) {
+  /** The confetti card. rank: show the headband for a new rank (-1 for none). */
+  function showCelebration(title, text, rank) {
+    $("celebrate-title").textContent = title;
+    $("celebrate-text").textContent = text;
+    var hasRank = rank >= 0;
+    $("celebrate-emoji").hidden = hasRank;
+    $("celebrate-rank").hidden = !hasRank;
+    if (hasRank) fillEmblem($("celebrate-rank"), rank);
+    openDialog($("celebrate-sheet"), $("celebrate-ok"));
+    confetti($("confetti"));
+  }
+  function celebrate(a, rankUp) {
     if (window.NF_NO_CELEBRATION) return; // automated tests that tick through whole arcs
     var rated = a.numbers.filter(function (n) { return ratings[n]; });
     var avg = rated.length ? rated.reduce(function (sum, n) { return sum + ratings[n]; }, 0) / rated.length : 0;
     var idx = arcs.indexOf(a), next = arcs[idx + 1];
-    $("celebrate-title").textContent = a.name + " complete!";
     var w = a.numbers.filter(function (n) { return watched.has(n); }).length;
-    $("celebrate-text").textContent = w + " episode" + (w === 1 ? "" : "s") + " watched" +
-      (avg ? " · your average ★ " + avg.toFixed(1) : "") + (next ? ". Next up: " + (prefs.shield && !arcStarted(next) ? "the next arc" : next.name) + "." : ". That's the whole series!");
-    openDialog($("celebrate-sheet"), $("celebrate-ok"));
-    confetti($("confetti"));
+    var up = rankUp >= 0 ? rankUp : -1;
+    showCelebration(a.name + " complete!", w + " episode" + (w === 1 ? "" : "s") + " watched" +
+      (avg ? " · your average ★ " + avg.toFixed(1) : "") + (next ? ". Next up: " + (prefs.shield && !arcStarted(next) ? "the next arc" : next.name) + "." : ". That's the whole series!") +
+      (up !== -1 ? " And you're now " + (/^[AEIOU]/.test(RANKS[up].name) ? "an " : "a ") + RANKS[up].name + "!" : ""), up);
   }
   function confetti(canvas) {
     if (reduceMotion() || !canvas.getContext) return;
@@ -1219,12 +1250,394 @@
     $("streak-chip").addEventListener("click", openCalendar);
   }
 
+  // ---------- Ninja rank & badges ----------
+  // Ranks go by canon episodes watched (the headline number).
+  var RANKS = [
+    { name: "Academy Student", at: 0 },
+    { name: "Genin", at: 10 },
+    { name: "Chūnin", at: 40 },
+    { name: "Jōnin", at: 75 },
+    { name: "ANBU", at: 100 },
+    { name: "Kage", at: 120 },
+    { name: "Hokage", at: 130 }
+  ];
+  function canonWatchedBy(has) { return canonEpisodes.filter(function (e) { return has(e.number); }).length; }
+  function myCanon() { return canonWatchedBy(function (n) { return watched.has(n); }); }
+  function memberCanon(m) { return canonWatchedBy(function (n) { return m.p[n] && m.p[n].state === "watched"; }); }
+  function rankFor(count) {
+    var r = 0;
+    RANKS.forEach(function (k, i) { if (count >= k.at) r = i; });
+    return r;
+  }
+  function myRank() { return rankFor(myCanon()); }
+  /** The headband: a cloth band behind a metal plate with the leaf. */
+  function fillEmblem(el, rank) {
+    if (!el.firstChild) {
+      var band = document.createElement("span");
+      band.className = "emblem-band";
+      var plate = document.createElement("span");
+      plate.className = "emblem-plate";
+      var leaf = document.querySelector(".app-mark .app-leaf");
+      if (leaf) plate.appendChild(leaf.cloneNode(true));
+      el.appendChild(band);
+      el.appendChild(plate);
+    }
+    el.dataset.rank = rank;
+  }
+
+  var MAIN_ARCS = [["Land of Waves", "🌉"], ["Chūnin Exams", "📜"], ["Konoha Crush", "🏯"], ["Search for Tsunade", "🐸"], ["Sasuke Recovery Mission", "🌀"]];
+  function arcNamed(name) { return arcs.filter(function (a) { return a.name === name; })[0]; }
+  var BADGES = [{ id: "first", icon: "🍃", name: "First Mission", desc: "Watch your first episode", test: function (s) { return s.watched >= 1; } }]
+    .concat(MAIN_ARCS.map(function (x, i) {
+      return { id: "arc" + (i + 1), icon: x[1], name: x[0], arc: x[0], desc: "Finish the arc", test: function () {
+        var a = arcNamed(x[0]);
+        return !!a && arcDone(a) && a.numbers.some(function (n) { return watched.has(n); });
+      } };
+    }))
+    .concat([
+      { id: "streak3", icon: "🔥", name: "Warming Up", desc: "Watch 3 days in a row", test: function (s) { return s.longest >= 3; } },
+      { id: "streak7", icon: "☄️", name: "Will of Fire", desc: "Watch 7 days in a row", test: function (s) { return s.longest >= 7; } },
+      { id: "streak30", icon: "🌋", name: "Unstoppable", desc: "Watch 30 days in a row", test: function (s) { return s.longest >= 30; } },
+      { id: "binge", icon: "🍜", name: "Ramen Binge", desc: "Watch 5 episodes in one day", test: function (s) { return s.bestDay >= 5; } },
+      { id: "critic", icon: "⭐", name: "Critic", desc: "Rate 25 episodes", test: function (s) { return s.rated >= 25; } },
+      { id: "notes", icon: "💬", name: "Storyteller", desc: "React to or note 10 episodes", test: function (s) { return s.notes >= 10; } },
+      { id: "dodger", icon: "💨", name: "Filler Dodger", desc: "Skip 10 filler episodes", test: function (s) { return s.fillerSkipped >= 10; } },
+      { id: "fillerfan", icon: "🍡", name: "Filler Fan", desc: "Watch 25 filler episodes", test: function (s) { return s.fillerWatched >= 25; } },
+      { id: "team", icon: "🤝", name: "Team 7", desc: "Share 10 watched episodes with someone on your list", test: function (s) { return s.shared >= 10; } },
+      { id: "hokage", icon: "👑", name: "Hokage", desc: "Watch every canon episode", test: function (s) { return s.canon >= canonEpisodes.length; } },
+      { id: "believe", icon: "🍥", name: "Believe It!", desc: "Get through all 220 episodes (watched or skipped)", test: function (s) { return s.through >= TOTAL; } }
+    ]);
+  function badgeStats() {
+    var log = myLog(), st = streaks(log), bestDay = 0;
+    Object.keys(log).forEach(function (k) { bestDay = Math.max(bestDay, log[k].length); });
+    var fillerSkipped = 0, fillerWatched = 0, shared = 0;
+    skipped.forEach(function (n) { if (kindOf(EPISODES[n - 1]) === "filler") fillerSkipped++; });
+    watched.forEach(function (n) {
+      if (kindOf(EPISODES[n - 1]) === "filler") fillerWatched++;
+      if (sync.roomId && othersWho(n).length) shared++;
+    });
+    return { watched: watched.size, canon: myCanon(), longest: st.longest, bestDay: bestDay, rated: Object.keys(ratings).length,
+      notes: Object.keys(notes).length, fillerSkipped: fillerSkipped, fillerWatched: fillerWatched, shared: shared,
+      through: watched.size + skipped.size };
+  }
+  var badgesReady = false;
+  /** Saves newly earned badges (they stay earned) and announces them, except on startup. */
+  function checkBadges() {
+    if (!profile.badges || typeof profile.badges !== "object") profile.badges = {};
+    var s = badgeStats(), fresh = [];
+    BADGES.forEach(function (b) {
+      if (!profile.badges[b.id] && b.test(s)) { profile.badges[b.id] = Date.now(); fresh.push(b); }
+    });
+    if (fresh.length) {
+      saveProfile();
+      if (badgesReady) badgePop(fresh);
+      if ($("rank-sheet").open) renderRankSheet();
+    }
+    badgesReady = true;
+  }
+  function badgeCount() { return Object.keys(profile.badges || {}).length; }
+  function badgeName(b) { // a future arc's name is a spoiler while the shield is on
+    return b.arc && prefs.shield && !profile.badges[b.id] && !arcStarted(arcNamed(b.arc)) ? "" : b.name;
+  }
+  var badgePopTimer = null;
+  function badgePop(list) {
+    var el = $("badge-pop");
+    $("badge-pop-icon").textContent = list[0].icon;
+    $("badge-pop-text").textContent = list.length === 1 ? "Badge earned: " + (badgeName(list[0]) || "a new arc") : list.length + " badges earned";
+    el.hidden = false;
+    // a popover sits in the top layer, above any open sheet
+    if (el.showPopover) { try { if (!el.matches(":popover-open")) el.showPopover(); } catch (e) { /* not supported */ } }
+    replay(el, "show");
+    clearTimeout(badgePopTimer);
+    badgePopTimer = setTimeout(hideBadgePop, 4000);
+  }
+  function hideBadgePop() {
+    var el = $("badge-pop");
+    if (el.hidePopover) { try { el.hidePopover(); } catch (e) { /* already hidden */ } }
+    el.hidden = true;
+  }
+  function updateRank() {
+    var r = myRank();
+    $("rank-name").textContent = RANKS[r].name;
+    $("rank-chip").dataset.rank = r;
+    $("rank-chip").setAttribute("aria-label", "Rank: " + RANKS[r].name + ", " + badgeCount() + " badges. Open Rank and Badges");
+    $("menu-rank-value").textContent = RANKS[r].name;
+  }
+  function renderRankSheet() {
+    var c = myCanon(), r = rankFor(c), next = RANKS[r + 1];
+    fillEmblem($("rank-emblem"), r);
+    $("rank-title").textContent = RANKS[r].name;
+    $("rank-next").textContent = next
+      ? plural(next.at - c, "more canon episode") + " to " + next.name
+      : "The highest rank. Every canon episode watched!";
+    var pct = next ? Math.round(((c - RANKS[r].at) / (next.at - RANKS[r].at)) * 100) : 100;
+    $("rank-bar").style.width = pct + "%";
+    $("rank-bar").setAttribute("aria-valuenow", String(pct));
+    var ladder = $("rank-ladder");
+    ladder.textContent = "";
+    RANKS.forEach(function (k, i) {
+      var row = document.createElement("div");
+      row.className = "row rank-step" + (i < r ? " done" : i === r ? " current" : "");
+      var dot = document.createElement("span"); dot.className = "rank-step-dot"; dot.setAttribute("aria-hidden", "true");
+      var l = document.createElement("span"); l.className = "row-label"; l.textContent = k.name;
+      var v = document.createElement("span"); v.className = "row-value";
+      v.textContent = i === r ? "You're here" : k.at ? k.at + " canon" : "Start";
+      row.appendChild(dot); row.appendChild(l); row.appendChild(v);
+      ladder.appendChild(row);
+    });
+    var people = sync.roomId ? partners() : [];
+    $("rank-people").hidden = !people.length;
+    var list = $("rank-people-list");
+    list.textContent = "";
+    if (people.length) [{ name: "You", c: c, b: badgeCount() }].concat(people.map(function (m) { return { name: m.name, c: memberCanon(m), b: m.b }; }))
+      .forEach(function (p) {
+        var row = document.createElement("div");
+        row.className = "row";
+        var l = document.createElement("span"); l.className = "row-label"; l.textContent = p.name;
+        var v = document.createElement("span"); v.className = "row-value";
+        v.textContent = RANKS[rankFor(p.c)].name + (typeof p.b === "number" ? " · " + plural(p.b, "badge") : "");
+        row.appendChild(l); row.appendChild(v); list.appendChild(row);
+      });
+    $("badge-count").textContent = badgeCount() + " of " + BADGES.length;
+    var grid = $("award-grid");
+    grid.textContent = "";
+    BADGES.forEach(function (b) {
+      var got = profile.badges[b.id];
+      var card = document.createElement("div");
+      card.className = "award" + (got ? " earned" : "");
+      var icon = document.createElement("span"); icon.className = "award-icon"; icon.textContent = b.icon; icon.setAttribute("aria-hidden", "true");
+      var name = document.createElement("span"); name.className = "award-name";
+      var shown = badgeName(b);
+      name.textContent = shown || "Hidden arc";
+      if (!shown) name.classList.add("is-hidden-title");
+      var desc = document.createElement("span"); desc.className = "award-desc";
+      desc.textContent = got ? "Earned " + formatDate(new Date(got)) : b.desc;
+      card.setAttribute("aria-label", (shown || "Hidden arc") + ". " + (got ? "Earned " + formatDate(new Date(got)) : "Not earned yet: " + b.desc));
+      card.setAttribute("role", "img");
+      card.appendChild(icon); card.appendChild(name); card.appendChild(desc);
+      grid.appendChild(card);
+    });
+  }
+  function celebrateRank(r) {
+    if (window.NF_NO_CELEBRATION) return;
+    var next = RANKS[r + 1];
+    showCelebration("Rank up: " + RANKS[r].name + "!",
+      plural(myCanon(), "canon episode") + " watched. " + (next ? "Next rank: " + next.name + " at " + next.at + "." : "That's every canon episode. Believe it!"), r);
+  }
+
+  // ---------- Watching together: the shared up-next card and the race ----------
+  /** "us": the card shows the next episode nobody on the list has watched (or skipped), and marks it for everyone. */
+  function deckMode() { return prefs.deckMode === "us" && sync.roomId && partners().length ? "us" : "me"; }
+  function seenByOthers(n) { return partners().some(function (m) { return m.p[n] && m.p[n].state !== "none"; }); }
+  function deckUpcoming(count) {
+    if (deckMode() !== "us") return upcoming(count);
+    return upcoming(TOTAL).filter(function (ep) { return !seenByOthers(ep.number); }).slice(0, count);
+  }
+  function renderDeckMode() {
+    var people = sync.roomId ? partners() : [];
+    $("deck-mode").hidden = !people.length;
+    if (!people.length) return;
+    $("deck-mode-us").textContent = people.length === 1 ? "With " + people[0].name : "Together";
+    var mode = deckMode();
+    Array.prototype.forEach.call($("deck-mode").children, function (b) { b.setAttribute("aria-checked", String(b.dataset.mode === mode)); });
+    syncSegment($("deck-mode"));
+  }
+  /** Marks entries for everyone else too when the card or plan is in "together" mode. */
+  function shareIfTogether(numbers) {
+    if (deckMode() !== "us" || prefs.together) return; // "We always watch together" already does it
+    var entries = {};
+    numbers.forEach(function (n) { entries[n] = entryOf(n, changedAt[n] || stamp()); });
+    markForOthers(entries);
+  }
+  function renderRace() {
+    var people = sync.roomId ? partners() : [];
+    $("race").hidden = !people.length;
+    if (!people.length) return;
+    var mine = myCanon(), total = canonEpisodes.length;
+    var rows = [{ name: "You", c: mine, me: true }].concat(people.map(function (m) { return { name: m.name, c: memberCanon(m) }; }));
+    var box = $("race-rows");
+    box.textContent = "";
+    rows.forEach(function (p) {
+      var row = document.createElement("span"); row.className = "race-row" + (p.me ? " me" : "");
+      var name = document.createElement("span"); name.className = "race-name"; name.textContent = p.name;
+      var track = document.createElement("span"); track.className = "race-track";
+      var fill = document.createElement("span"); fill.className = "race-fill"; fill.style.width = (p.c / total * 100) + "%";
+      track.appendChild(fill);
+      var count = document.createElement("span"); count.className = "race-count"; count.textContent = p.c;
+      row.appendChild(name); row.appendChild(track); row.appendChild(count);
+      box.appendChild(row);
+    });
+    var lead = rows.slice(1).sort(function (a, b) { return b.c - a.c; })[0];
+    var diff = mine - lead.c, text;
+    if (people.length === 1) {
+      text = diff > 0 ? "You're " + plural(diff, "canon episode") + " ahead of " + lead.name
+        : diff < 0 ? lead.name + " is " + plural(-diff, "canon episode") + " ahead"
+        : "Neck and neck with " + lead.name;
+    } else {
+      text = diff > 0 ? "You're in the lead by " + plural(diff, "canon episode") : diff < 0 ? lead.name + " is in the lead" : "You're tied for the lead";
+    }
+    $("race-text").textContent = text;
+    $("race").setAttribute("aria-label", rows.map(function (p) { return p.name + " " + p.c; }).join(", ") + " canon episodes. " + text + ". Open Rank and Badges");
+  }
+
+  // ---------- Opening & ending songs ----------
+  var SONG_LIST = typeof SONGS !== "undefined" ? SONGS : { op: [], ed: [] }; // data/episodes.js
+  function songIndex(kind, n) {
+    for (var i = 0; i < SONG_LIST[kind].length; i++) if (n >= SONG_LIST[kind][i][0] && n <= SONG_LIST[kind][i][1]) return i;
+    return -1;
+  }
+  function songText(kind, n) {
+    var i = songIndex(kind, n);
+    return i === -1 ? "" : (kind === "op" ? "OP " : "ED ") + (i + 1) + " · " + SONG_LIST[kind][i][2];
+  }
+  /** "New opening" when an episode is the first with a new song (episode 1 doesn't count). */
+  function newSongs(n) {
+    var out = [];
+    ["op", "ed"].forEach(function (kind) {
+      var i = songIndex(kind, n);
+      if (i > 0 && SONG_LIST[kind][i][0] === n) out.push(kind);
+    });
+    return out;
+  }
+  function renderSongs() {
+    var cur = nextEpisode(), now = cur ? cur.number : 0;
+    ["op", "ed"].forEach(function (kind) {
+      var box = $(kind + "-list");
+      box.textContent = "";
+      SONG_LIST[kind].forEach(function (s, i) {
+        var row = document.createElement("div");
+        row.className = "row song-row" + (now >= s[0] && now <= s[1] ? " now" : "");
+        var main = document.createElement("button");
+        main.type = "button";
+        main.className = "song-main";
+        var num = document.createElement("span"); num.className = "song-num"; num.textContent = i + 1;
+        var text = document.createElement("span"); text.className = "song-text";
+        var title = document.createElement("span"); title.className = "song-title"; title.textContent = s[2];
+        var sub = document.createElement("span"); sub.className = "song-sub";
+        sub.textContent = (s[3] ? "“" + s[3] + "” · " : "") + s[4] + " · Ep " + s[0] + "–" + s[1];
+        text.appendChild(title); text.appendChild(sub);
+        main.appendChild(num); main.appendChild(text);
+        if (now >= s[0] && now <= s[1]) {
+          var pill = document.createElement("span"); pill.className = "song-now"; pill.textContent = "Now";
+          main.appendChild(pill);
+        }
+        main.setAttribute("aria-label", (kind === "op" ? "Opening " : "Ending ") + (i + 1) + ": " + s[2] + " by " + s[4] + ", episodes " + s[0] + " to " + s[1] + ". Jump to episode " + s[0]);
+        main.addEventListener("click", function () { closeDialog($("songs-sheet")); jumpTo(EPISODES[s[0] - 1]); });
+        var play = document.createElement("a");
+        play.className = "song-play";
+        play.href = "https://www.youtube.com/results?search_query=" + encodeURIComponent("Naruto " + (kind === "op" ? "opening " : "ending ") + (i + 1) + " " + s[2] + " " + s[4]);
+        play.target = "_blank";
+        play.rel = "noopener noreferrer";
+        play.setAttribute("aria-label", "Find " + s[2] + " on YouTube");
+        play.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>';
+        row.appendChild(main);
+        row.appendChild(play);
+        box.appendChild(row);
+      });
+    });
+  }
+
+  // ---------- Plan tonight ----------
+  var PLAN_TIMES = [[30, "30 min"], [45, "45 min"], [60, "1 hr"], [90, "1½ hr"], [120, "2 hr"], [180, "3 hr"]];
+  function planMinutes() {
+    return PLAN_TIMES.some(function (t) { return t[0] === prefs.planMinutes; }) ? prefs.planMinutes : 60;
+  }
+  function planEpisodes() {
+    var minutes = planMinutes();
+    var count = Math.max(1, Math.floor((minutes + 5) / MINUTES_PER_EPISODE)); // a few minutes over is fine
+    return deckUpcoming(count);
+  }
+  function renderPlan() {
+    var minutes = planMinutes();
+    Array.prototype.forEach.call($("plan-times").children, function (b) {
+      b.setAttribute("aria-checked", String(Number(b.dataset.min) === minutes));
+    });
+    var eps = planEpisodes();
+    $("plan-count").textContent = eps.length;
+    $("plan-count-label").textContent = eps.length === 1 ? "episode" : "episodes";
+    var end = new Date(Date.now() + eps.length * MINUTES_PER_EPISODE * 60000);
+    $("plan-end").textContent = eps.length ? "Done around " + end.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : "";
+    var people = deckMode() === "us" ? partners() : [];
+    var lines = [];
+    if (people.length) lines.push("For you and " + nameList(people) + ": episodes none of you has watched.");
+    lines.push(prefs.skipFillerNext ? "Skipping filler." : "Including filler.");
+    $("plan-note").textContent = lines.join(" ");
+    var list = $("plan-list");
+    list.textContent = "";
+    eps.forEach(function (ep) {
+      var s = newSongs(ep.number);
+      list.appendChild(topItem(ep.number, s.length ? "🎵" : kindOf(ep) === "filler" ? "Filler" : ""));
+    });
+    list.hidden = !eps.length;
+    $("plan-empty").hidden = !!eps.length;
+    $("plan-done").hidden = !eps.length;
+    $("plan-done").textContent = eps.length ? "Mark " + (eps.length === 1 ? "It" : "All " + eps.length) + " Watched" + (people.length ? " Together" : "") : "";
+  }
+  /** Marks tonight's episodes watched, one at a time so they count for the calendar. */
+  function finishPlan() {
+    var eps = planEpisodes().map(function (e) { return e.number; });
+    if (!eps.length) return;
+    var before = {}, lastBefore = profile.last ? { n: profile.last.n, at: profile.last.at } : null;
+    eps.forEach(function (n) { before[n] = stateOf(n); });
+    withCelebration(function () {
+      eps.forEach(function (n) { setState(n, "watched"); recordChanges([n]); });
+      shareIfTogether(eps);
+      noteWatched(eps[eps.length - 1]);
+      updateArcProgress();
+    });
+    eps.forEach(function (n) { syncRow(n - 1); });
+    updateProgress();
+    applyFilters();
+    closeDialog($("plan-sheet"));
+    toast("Marked " + plural(eps.length, "episode") + " watched", "Undo", function () {
+      eps.forEach(function (n) { setState(n, before[n]); recordChanges([n]); syncRow(n - 1); });
+      shareIfTogether(eps);
+      if (lastBefore) profile.last = lastBefore; else delete profile.last;
+      saveProfile();
+      updateProgress();
+      applyFilters();
+    });
+  }
+  function initExtras() {
+    PLAN_TIMES.forEach(function (t) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "plan-time";
+      b.setAttribute("role", "radio");
+      b.dataset.min = t[0];
+      b.textContent = t[1];
+      b.addEventListener("click", function () { prefs.planMinutes = t[0]; savePrefs(); renderPlan(); pop(b); });
+      $("plan-times").appendChild(b);
+    });
+    function openPlan() { renderPlan(); openDialog($("plan-sheet")); }
+    $("plan-open").addEventListener("click", openPlan);
+    $("menu-plan").addEventListener("click", openPlan);
+    $("plan-done").addEventListener("click", finishPlan);
+    function openRank() { renderRankSheet(); openDialog($("rank-sheet")); }
+    $("rank-chip").addEventListener("click", openRank);
+    $("menu-rank").addEventListener("click", openRank);
+    $("race").addEventListener("click", openRank);
+    $("badge-pop").addEventListener("click", function () { hideBadgePop(); openRank(); });
+    $("menu-songs").addEventListener("click", function () { renderSongs(); openDialog($("songs-sheet")); });
+    Array.prototype.forEach.call($("deck-mode").children, function (b) {
+      b.addEventListener("click", function () {
+        if (prefs.deckMode === b.dataset.mode || (!prefs.deckMode && b.dataset.mode === "me")) return;
+        prefs.deckMode = b.dataset.mode;
+        savePrefs();
+        deck.revealed = {};
+        renderDeckMode();
+        renderDeck();
+      });
+    });
+    checkBadges();
+  }
+
   // ---------- Backup ----------
   function exportBackup() {
     var data = {
       app: "naruto-filler-guide", backup: 1, exported: new Date().toISOString(), name: profile.name || "",
       watched: sorted(watched), skipped: sorted(skipped), changedAt: changedAt, ratings: ratings, favorites: sorted(favorites),
-      notes: notes
+      notes: notes, badges: profile.badges || {}
     };
     var file = "naruto-filler-backup-" + new Date().toISOString().slice(0, 10) + ".json";
     var blob = new Blob([JSON.stringify(data, null, 1)], { type: "application/json" });
@@ -1263,7 +1676,8 @@
         ratings: d.ratings && typeof d.ratings === "object" ? d.ratings : {},
         name: typeof d.name === "string" ? d.name.slice(0, 30) : "", exported: d.exported,
         notes: d.notes && typeof d.notes === "object" ? cleanNotes(d.notes) : null, // older backups have none
-        changedAt: d.changedAt && typeof d.changedAt === "object" ? d.changedAt : {}
+        changedAt: d.changedAt && typeof d.changedAt === "object" ? d.changedAt : {},
+        badges: d.badges && typeof d.badges === "object" ? d.badges : {}
       };
       var when = Date.parse(d.exported);
       $("restore-text").textContent = "From " + (when ? formatDate(new Date(when)) : "an unknown date") + ": " +
@@ -1295,6 +1709,11 @@
     });
     favorites = new Set(r.favorites);
     if (r.notes) { notes = r.notes; save(STORAGE.notes, notes); }
+    // badges stay earned: keep the earliest date of each
+    Object.keys(r.badges).forEach(function (id) {
+      var t = r.badges[id];
+      if (typeof t === "number" && BADGES.some(function (b) { return b.id === id; }) && !(profile.badges[id] <= t)) profile.badges[id] = t;
+    });
     if (!profile.name && r.name) { profile.name = r.name; saveProfile(); renderName(); }
     savePersonal();
     for (var i = 0; i < TOTAL; i++) syncRow(i);
@@ -1343,6 +1762,7 @@
     if ($("top-sheet").open) renderTop();
     if (epSheet.n === n) renderEpSheet();
     if (ratePrompt.n === n) renderRatePrompt();
+    checkBadges();
   }
 
   // ---------- "How was it?" after Watched ----------
@@ -1415,6 +1835,8 @@
     $("ep-sheet-reveal").hidden = !hideTitle;
     $("ep-sheet-arc").textContent = ep.arc;
     $("ep-sheet-arc").classList.toggle("is-hidden-title", hideTitle && !arcStarted(arcOf[n - 1]));
+    $("ep-sheet-op").textContent = songText("op", n);
+    $("ep-sheet-ed").textContent = songText("ed", n);
     $("ep-sheet-chapters").textContent = ep.chapters ? (ep.chapters.indexOf(",") === -1 ? "Chapter " : "Chapters ") + ep.chapters : "None (anime-only)";
     var when = watched.has(n) && changedAt[n];
     $("ep-sheet-date-row").hidden = !when;
@@ -1600,13 +2022,17 @@
     $("welcome-form").addEventListener("submit", function (e) {
       e.preventDefault();
       profile.name = $("welcome-name").value.trim().slice(0, 30);
+      profile.asked = true;
       saveProfile();
       renderName();
       renderSync();
       if (profile.name) toast("Hi, " + profile.name + "!");
       closeDialog($("welcome-sheet"));
     });
-    $("welcome-skip").addEventListener("click", function () { closeDialog($("welcome-sheet")); });
+    $("welcome-skip").addEventListener("click", function () {
+      if (!profile.asked) { profile.asked = true; saveProfile(); } // right away, not when the close animation ends
+      closeDialog($("welcome-sheet"));
+    });
     $("welcome-sheet").addEventListener("close", function () {
       if (!profile.asked) { profile.asked = true; saveProfile(); }
       var q = welcome.queued; welcome.queued = [];
@@ -1886,7 +2312,7 @@
     var r = {}, f = {};
     Object.keys(ratings).forEach(function (n) { r[n] = ratings[n]; });
     favorites.forEach(function (n) { f[n] = true; });
-    var out = { name: (profile.name || "").trim().slice(0, 30) || "Someone", r: r, f: f, n: JSON.parse(JSON.stringify(notes)) };
+    var out = { name: (profile.name || "").trim().slice(0, 30) || "Someone", r: r, f: f, n: JSON.parse(JSON.stringify(notes)), b: badgeCount() };
     if (profile.last && profile.last.n) out.last = { n: profile.last.n, at: profile.last.at };
     return out;
   }
@@ -1911,6 +2337,7 @@
         clean.last = { n: m.last.n, at: m.last.at };
       }
       clean.n = cleanNotes(m.n);
+      clean.b = Number.isInteger(m.b) && m.b >= 0 && m.b <= 100 ? m.b : null;
       clean.p = {};
       if (m.p && typeof m.p === "object") Object.keys(m.p).forEach(function (k) {
         var n = Number(k), e = m.p[k];
@@ -1926,8 +2353,12 @@
     renderAllWho();
     if (rows.length === TOTAL) for (var i = 0; i < TOTAL; i++) syncRow(i); // their reactions
     updateStreak();
+    renderRace();
+    renderDeckMode();
+    checkBadges();
     if ($("top-sheet").open) renderTop();
     if ($("calendar-sheet").open) renderCalendar();
+    if ($("rank-sheet").open) renderRankSheet();
     renderDeck();
     if (epSheet.n) renderEpSheet();
     if (ratePrompt.n) renderRatePrompt();
@@ -2142,6 +2573,7 @@
     othersQueue = {};
     renderPartner();
     renderAllWho();
+    for (var i = 0; i < TOTAL; i++) syncRow(i); // their reactions go
     save(STORAGE.room, null);
     renderSync();
     toast("Left the shared list. Your progress stays on this device.");
@@ -2335,6 +2767,7 @@
     initRatePrompt();
     initEpSheet();
     initCalendar();
+    initExtras();
     applyShield();
     initInstall();
     initWelcome();

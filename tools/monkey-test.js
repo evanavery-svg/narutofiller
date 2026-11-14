@@ -70,6 +70,10 @@ const int = (lo, hi) => lo + Math.floor(rnd() * (hi - lo + 1));
     const open = [...document.querySelectorAll("dialog[open]")].map((d) => d.id);
     if (open.length > 1) out.push("several dialogs open: " + open.join(","));
     if (document.documentElement.scrollWidth > innerWidth + 1) out.push("horizontal overflow");
+    // rank matches canon watched
+    const ranks = [[0, "Academy Student"], [10, "Genin"], [40, "Chūnin"], [75, "Jōnin"], [100, "ANBU"], [120, "Kage"], [130, "Hokage"]];
+    const rank = ranks.filter((r) => cw >= r[0]).pop()[1];
+    if (document.getElementById("rank-name").textContent !== rank) out.push(`rank "${document.getElementById("rank-name").textContent}" vs ${rank} (${cw} canon)`);
     // visible rows must be consistent with the filter + hide-watched
     const show = prefs.show || "all";
     document.querySelectorAll(".episode").forEach((li) => {
@@ -108,15 +112,18 @@ const int = (lo, hi) => lo + Math.floor(rnd() * (hi - lo + 1));
     reload: async () => { if (int(0, 5)) return "reload (skipped)"; await p.reload(); await p.waitForFunction(() => document.documentElement.classList.contains("ready")); return "reload"; },
     note: async () => { await closeAll(); const n = int(1, 220); await p.evaluate((k) => document.querySelector(`#ep-${k} .ep-info`).click(), n); const e = pick(["🔥", "😭", "😂", "😮", "😡", "💤"]); await p.click(`#ep-sheet-reactions [data-e="${e}"]`); if (int(0, 1)) await p.fill("#ep-sheet-note", pick(["", "wow", "so good <b>bold</b>", "a".repeat(400)])); await p.keyboard.press("Escape"); return `note ${n} ${e}`; },
     calendar: async () => { await closeAll(); if (await p.isVisible("#streak-chip") && int(0, 1)) await p.click("#streak-chip"); else { await p.click("#menu-open"); await p.click("#menu-calendar"); } const cells = await p.locator("#cal-grid .cal-cell[data-day]").count(); if (cells) await p.locator("#cal-grid .cal-cell[data-day]").nth(int(0, cells - 1)).click(); await p.keyboard.press("Escape"); return "calendar"; },
+    plan: async () => { await closeAll(); await p.click("#plan-open"); const m = pick([30, 45, 60, 90, 120, 180]); await p.click(`#plan-times [data-min="${m}"]`); if (int(0, 1) && await p.isVisible("#plan-done")) { await p.click("#plan-done"); await p.waitForTimeout(50); return "plan " + m + " marked"; } await p.keyboard.press("Escape"); return "plan " + m; },
+    rankSheet: async () => { await closeAll(); if (int(0, 1)) await p.click("#rank-chip"); else { await p.click("#menu-open"); await p.click("#menu-rank"); } await p.keyboard.press("Escape"); return "rank sheet"; },
+    songs: async () => { await closeAll(); await p.click("#menu-open"); await p.click("#menu-songs"); if (int(0, 1)) { const k = pick(["op", "ed"]); const c = await p.locator(`#${k}-list .song-main`).count(); await p.locator(`#${k}-list .song-main`).nth(int(0, c - 1)).click(); return "song jump"; } await p.keyboard.press("Escape"); return "songs"; },
     wrapped: async () => { await closeAll(); await p.click("#menu-open"); await p.click(pick(["#menu-wrapped", "#menu-top"])); await p.keyboard.press("Escape"); return "wrapped/top"; },
   };
   const names = Object.keys(actions);
-  const weights = { tickRandom: 6, deckWatch: 5, deckSkip: 2, undo: 3, filter: 2, search: 2, menuSwitch: 2, bulk: 2, rate: 3, rateBar: 2, arc: 2, guideJump: 1, reset: 1, reload: 1, wrapped: 1, note: 2, calendar: 1 };
+  const weights = { tickRandom: 6, deckWatch: 5, deckSkip: 2, undo: 3, filter: 2, search: 2, menuSwitch: 2, bulk: 2, rate: 3, rateBar: 2, arc: 2, guideJump: 1, reset: 1, reload: 1, wrapped: 1, note: 2, calendar: 1, plan: 1, rankSheet: 1, songs: 1 };
   const bag = names.flatMap((n) => Array(weights[n]).fill(n));
   for (let i = 0; i < STEPS; i++) {
     const name = pick(bag);
     let what;
-    try { what = await actions[name](); } catch (e) { what = name + " FAILED: " + e.message.split("\n")[0]; problems.push(`step ${i}: action error ${what}`); }
+    try { what = await actions[name](); } catch (e) { what = name + " FAILED: " + e.message.replace(/\x1b\[[0-9;]*m/g, "").split("\n").slice(0, 14).join(" / "); problems.push(`step ${i}: action error ${what}`); }
     log.push(what);
     await p.waitForTimeout(30);
     // let any card flight finish before checking the card

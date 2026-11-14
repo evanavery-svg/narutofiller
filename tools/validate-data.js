@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Sanity-checks data/episodes.js: exactly 220 episodes, numbered 1–220,
-// no gaps or duplicates, valid types, every episode has an arc. Prints a count per type.
+// no gaps or duplicates, valid types, every episode has an arc, and the theme songs cover 1–220. Prints a count per type.
 // Usage: node tools/validate-data.js
 const fs = require("fs");
 const path = require("path");
@@ -8,7 +8,7 @@ const vm = require("vm");
 
 const src = fs.readFileSync(path.join(__dirname, "..", "data", "episodes.js"), "utf8");
 const ctx = {};
-vm.runInNewContext(src + "\nthis.EPISODES = EPISODES;", ctx);
+vm.runInNewContext(src + "\nthis.EPISODES = EPISODES; this.SONGS = SONGS;", ctx);
 const eps = ctx.EPISODES;
 
 const TYPES = ["canon", "mixed", "filler", "anime-canon"];
@@ -25,6 +25,18 @@ eps.forEach((e, i) => {
   if (typeof e.arc !== "string" || !e.arc.trim()) errors.push(`episode ${e.number}: missing arc`);
 });
 for (let n = 1; n <= 220; n++) if (!seen.has(n)) errors.push(`missing episode ${n}`);
+
+// Theme songs: each list covers episodes 1–220 in order, with no gaps or overlaps
+for (const kind of ["op", "ed"]) {
+  let next = 1;
+  (ctx.SONGS[kind] || []).forEach((s, i) => {
+    if (s[0] !== next) errors.push(`${kind} ${i + 1} starts at ${s[0]}, expected ${next}`);
+    if (!(s[1] >= s[0]) || !s[2] || !s[4]) errors.push(`${kind} ${i + 1}: bad entry`);
+    next = s[1] + 1;
+  });
+  if (next !== 221) errors.push(`${kind} songs end at ${next - 1}, expected 220`);
+}
+console.log(`Songs: ${ctx.SONGS.op.length} openings, ${ctx.SONGS.ed.length} endings`);
 
 const counts = Object.fromEntries(TYPES.map((t) => [t, eps.filter((e) => e.type === t).length]));
 console.log(`Episodes: ${eps.length}`);

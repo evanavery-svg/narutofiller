@@ -227,3 +227,39 @@ const EPISODES = [
   {"number": 219, "title": "The Ultimate Weapon Reborn", "type": "filler", "arc": "Sunagakure Support Mission"},
   {"number": 220, "title": "Departure", "type": "mixed", "arc": "Sunagakure Support Mission", "chapters": "238"},
 ];
+
+// Opening and ending theme songs: [first episode, last episode, title (romaji), English title, artist].
+// Source: each episode's "opening song" / "ending song" on the Naruto Fandom wiki, and each song's
+// page for its Japanese title and artist, retrieved 2026-11-14. (Episode 161's page lists no songs;
+// the song pages give the ranges that include it.)
+// eslint-disable-next-line no-unused-vars
+const SONGS = {
+  op: [
+    [1, 25, "R★O★C★K★S", "", "Hound Dog"],
+    [26, 53, "Haruka Kanata", "Far Away", "Asian Kung-Fu Generation"],
+    [54, 77, "Kanashimi wo Yasashisa ni", "Turning Sadness Into Kindness", "Little by Little"],
+    [78, 103, "GO!!!", "", "FLOW"],
+    [104, 128, "Seishun Kyōsōkyoku", "Rhapsody of Youth", "Sambomaster"],
+    [129, 153, "No Boy, No Cry", "", "Stance Punks"],
+    [154, 178, "Namikaze Satellite", "Wind and Waves Satellite", "Snowkel"],
+    [179, 202, "Re:member", "", "FLOW"],
+    [203, 220, "Yurayura", "Swaying", "Hearts Grow"]
+  ],
+  ed: [
+    [1, 25, "Wind", "", "Akeboshi"],
+    [26, 51, "Harmonia", "", "Rythem"],
+    [52, 64, "Viva★Rock ~Japanese Side~", "", "Orange Range"],
+    [65, 77, "Alive", "", "Raiko"],
+    [78, 89, "Ima Made Nando mo", "Many Times Before", "The Mass Missile"],
+    [90, 103, "Ryūsei", "Meteor", "TiA"],
+    [104, 115, "Mountain a Go Go Two", "", "Captain Straydum"],
+    [116, 128, "Hajimete Kimi to Shabetta", "The First Time I Spoke With You", "GaGaGa SP"],
+    [129, 141, "Nakushita Kotoba", "Lost Words", "No Regret Life"],
+    [142, 153, "Speed", "", "Analogfish"],
+    [154, 165, "Soba ni Iru Kara", "Because You Are With Me", "Amadori"],
+    [166, 178, "Parade", "", "Chaba"],
+    [179, 191, "Yellow Moon", "", "Akeboshi"],
+    [192, 202, "Pinocchio", "", "Ore Ska Band"],
+    [203, 220, "Scenario", "", "Saboten"]
+  ]
+};
