@@ -530,6 +530,61 @@
     void el.offsetWidth;
     el.classList.add(cls);
   }
+  /** Shows a number counting up to its value. The element's real text is final at once (screen
+   *  readers, tests); the digits you see come from data-shown (see ".counting" in styles.css).
+   *  opts: from (default: the last value shown here, or 0), ms, delay, format. */
+  function countUp(el, to, opts) {
+    opts = opts || {};
+    var fmt = opts.format || String;
+    var from = opts.from != null ? opts.from : (el._countTo != null ? el._countTo : 0);
+    var ms = opts.ms != null ? opts.ms : 800, delay = opts.delay || 0;
+    if (el._countTo === to && el._countFrame && opts.from == null) return; // already counting to this
+    el.textContent = fmt(to);
+    el._countTo = to;
+    if (el._countFrame) cancelAnimationFrame(el._countFrame);
+    el._countFrame = 0;
+    if (!ms || from === to || reduceMotion() || !window.requestAnimationFrame) {
+      el.classList.remove("counting");
+      el.removeAttribute("data-shown");
+      return;
+    }
+    var start = 0;
+    el.setAttribute("data-shown", fmt(from));
+    el.classList.add("counting");
+    el._countFrame = requestAnimationFrame(function frame(now) {
+      if (!start) start = now + delay;
+      var t = Math.min(1, Math.max(0, (now - start) / ms)), eased = 1 - Math.pow(1 - t, 3);
+      el.setAttribute("data-shown", fmt(Math.round(from + (to - from) * eased)));
+      if (t < 1) { el._countFrame = requestAnimationFrame(frame); return; }
+      el._countFrame = 0;
+      el.classList.remove("counting");
+      el.removeAttribute("data-shown");
+    });
+  }
+  /** The next countUp on these starts from zero (a sheet is opening). */
+  function resetCounts(ids) { ids.forEach(function (id) { $(id)._countTo = null; }); }
+  /** A few copies of an emoji float up from a button inside a sheet. */
+  function floatEmoji(btn, emoji) {
+    var dlg = btn.closest("dialog");
+    if (reduceMotion() || !dlg || !btn.animate) return;
+    var br = btn.getBoundingClientRect(), dr = dlg.getBoundingClientRect();
+    for (var i = 0; i < 7; i++) (function (i) {
+      var el = document.createElement("span");
+      el.className = "float-emoji";
+      el.textContent = emoji;
+      el.setAttribute("aria-hidden", "true");
+      el.style.left = (br.left - dr.left + dlg.scrollLeft + br.width / 2 - 13) + "px";
+      el.style.top = (br.top - dr.top + dlg.scrollTop) + "px";
+      dlg.appendChild(el);
+      var dx = (Math.random() - 0.5) * 130, dy = -(80 + Math.random() * 120), rot = (Math.random() - 0.5) * 80, size = 0.7 + Math.random() * 0.9;
+      var anim = el.animate([
+        { transform: "translate(0, 0) scale(0.3)", opacity: 0 },
+        { opacity: 1, offset: 0.15 },
+        { transform: "translate(" + dx + "px, " + dy + "px) rotate(" + rot + "deg) scale(" + size + ")", opacity: 0 }
+      ], { duration: 900 + Math.random() * 500, delay: i * 45, easing: "cubic-bezier(.2, .7, .3, 1)", fill: "both" });
+      anim.onfinish = anim.oncancel = function () { el.remove(); };
+    })(i);
+  }
   function pop(el) { replay(el, "pop"); }
 
   // ---------- Episode maps (one square per episode) ----------
@@ -685,7 +740,9 @@
     var canon = canonEpisodes.filter(function (e) { return watched.has(e.number); }).length;
     var pct = Math.round((total / TOTAL) * 100);
     // Canon is the headline (and the bar); all episodes and skips are the smaller line
-    $("progress-canon-text").textContent = canon + " of " + canonEpisodes.length;
+    var headline = $("progress-canon-text"), jump = headline._countTo != null && Math.abs(canon - headline._countTo) >= 2;
+    countUp(headline, canon, { ms: jump && document.documentElement.classList.contains("ready") ? 650 : 0,
+      format: function (v) { return v + " of " + canonEpisodes.length; } });
     $("progress-all-text").textContent = total + " of " + TOTAL + " total" +
       (skipped.size ? " · " + skipped.size + " skipped" : "");
     setBar("progress-canon-bar", canon, canonEpisodes.length);
@@ -762,8 +819,15 @@
     var fresh = newSongs(ep.number);
     $("deck-song").hidden = !fresh.length;
     if (fresh.length) {
-      $("deck-song").textContent = "🎵 " + (fresh.length === 2 ? "New opening and ending!" : fresh[0] === "op"
-        ? "New opening: " + SONG_LIST.op[songIndex("op", ep.number)][2] : "New ending: " + SONG_LIST.ed[songIndex("ed", ep.number)][2]);
+      var songLine = fresh.length === 2 ? "New opening and ending!" : fresh[0] === "op"
+        ? "New opening: " + SONG_LIST.op[songIndex("op", ep.number)][2] : "New ending: " + SONG_LIST.ed[songIndex("ed", ep.number)][2];
+      if ($("deck-song").dataset.line !== songLine) { // (re)built only when it changes, so the note keeps bopping
+        $("deck-song").dataset.line = songLine;
+        $("deck-song").textContent = "";
+        var note = document.createElement("span"); note.className = "note"; note.textContent = "🎵";
+        $("deck-song").appendChild(note);
+        $("deck-song").appendChild(document.createTextNode(songLine));
+      }
     }
     $("deck-find").setAttribute("aria-label", "Show episode " + ep.number + " in the list");
   }
@@ -966,7 +1030,7 @@
     if (hasRank) fillEmblem($("celebrate-rank"), rank);
     $("celebrate-share").hidden = !hasRank;
     openDialog($("celebrate-sheet"), $("celebrate-ok"));
-    confetti($("confetti"));
+    confetti($("confetti"), hasRank);
   }
   function celebrate(a, rankUp) {
     if (window.NF_NO_CELEBRATION) return; // automated tests that tick through whole arcs
@@ -979,14 +1043,21 @@
       (avg ? " · your average ★ " + avg.toFixed(1) : "") + (next ? ". Next up: " + (prefs.shield && !arcStarted(next) ? "the next arc" : next.name) + "." : ". That's the whole series!") +
       (up !== -1 ? " And you're now " + (/^[AEIOU]/.test(RANKS[up].name) ? "an " : "a ") + RANKS[up].name + "!" : ""), up);
   }
-  function confetti(canvas) {
+  /** Confetti from the middle of the card. leaves: for a new rank, leaves drift down as well. */
+  function confetti(canvas, leaves) {
     if (reduceMotion() || !canvas.getContext) return;
     var ctx = canvas.getContext("2d");
     var w = canvas.width = canvas.clientWidth * (window.devicePixelRatio || 1);
     var h = canvas.height = canvas.clientHeight * (window.devicePixelRatio || 1);
     var colors = ["#f68b22", "#ffb800", "#34c759", "#ff3b30", "#007aff", "#ffffff"];
-    var bits = [];
-    for (var i = 0; i < 140; i++) {
+    var bits = [], dpr = window.devicePixelRatio || 1, life = leaves ? 4600 : 3200;
+    var greens = ["#34c759", "#2f9e44", "#8ce99a", "#51cf66", "#f08c00"];
+    if (leaves) for (var k = 0; k < 44; k++) {
+      bits.push({ leaf: true, x: Math.random() * w, y: -Math.random() * h * 0.5, vy: h * (0.0035 + Math.random() * 0.004),
+        sway: (12 + Math.random() * 26) * dpr, phase: Math.random() * 6.3, s: (7 + Math.random() * 7) * dpr,
+        r: Math.random() * 6.3, vr: (Math.random() - 0.5) * 0.08, c: greens[k % greens.length] });
+    }
+    for (var i = 0; i < (leaves ? 70 : 140); i++) {
       bits.push({ x: w / 2 + (Math.random() - 0.5) * w * 0.3, y: h * 0.35, vx: (Math.random() - 0.5) * w * 0.02,
         vy: -Math.random() * h * 0.02 - h * 0.005, s: (4 + Math.random() * 6) * (window.devicePixelRatio || 1),
         r: Math.random() * 6, vr: (Math.random() - 0.5) * 0.3, c: colors[i % colors.length] });
@@ -996,13 +1067,29 @@
       var t = now - start;
       ctx.clearRect(0, 0, w, h);
       bits.forEach(function (b) {
-        b.vy += h * 0.0006; b.x += b.vx; b.y += b.vy; b.r += b.vr;
-        ctx.save(); ctx.translate(b.x, b.y); ctx.rotate(b.r);
-        ctx.globalAlpha = Math.max(0, 1 - t / 3200);
-        ctx.fillStyle = b.c; ctx.fillRect(-b.s / 2, -b.s / 4, b.s, b.s / 2);
+        ctx.save();
+        if (b.leaf) { // a leaf drifts down, swaying and turning
+          b.y += b.vy; b.r += b.vr;
+          ctx.translate(b.x + Math.sin(t / 420 + b.phase) * b.sway, b.y);
+          ctx.rotate(b.r + Math.sin(t / 300 + b.phase) * 0.5);
+          ctx.globalAlpha = Math.max(0, Math.min(1, (life - t) / 900));
+          ctx.fillStyle = b.c;
+          ctx.beginPath();
+          ctx.moveTo(0, -b.s);
+          ctx.quadraticCurveTo(b.s * 0.85, -b.s * 0.1, 0, b.s);
+          ctx.quadraticCurveTo(-b.s * 0.85, -b.s * 0.1, 0, -b.s);
+          ctx.fill();
+          ctx.strokeStyle = "rgba(0, 0, 0, 0.18)"; ctx.lineWidth = dpr;
+          ctx.beginPath(); ctx.moveTo(0, -b.s * 0.7); ctx.lineTo(0, b.s * 1.25); ctx.stroke();
+        } else {
+          b.vy += h * 0.0006; b.x += b.vx; b.y += b.vy; b.r += b.vr;
+          ctx.translate(b.x, b.y); ctx.rotate(b.r);
+          ctx.globalAlpha = Math.max(0, 1 - t / 3200);
+          ctx.fillStyle = b.c; ctx.fillRect(-b.s / 2, -b.s / 4, b.s, b.s / 2);
+        }
         ctx.restore();
       });
-      if (t < 3200 && $("celebrate-sheet").open) requestAnimationFrame(frame); else ctx.clearRect(0, 0, w, h);
+      if (t < life && $("celebrate-sheet").open) requestAnimationFrame(frame); else ctx.clearRect(0, 0, w, h);
     })(start);
   }
 
@@ -1038,11 +1125,11 @@
   function renderWrapped() {
     var d = wrappedData();
     $("wrapped-who").textContent = profile.name ? profile.name + "'s Naruto" : "Your Naruto";
-    $("wrapped-count").textContent = d.count;
+    countUp($("wrapped-count"), d.count, { ms: 1000, delay: 450 });
     $("wrapped-count").nextElementSibling.textContent = d.count === 1 ? "episode" : "episodes";
     $("wrapped-hours").nextElementSibling.textContent = d.hours === 1 ? "hour" : "hours";
-    $("wrapped-hours").textContent = d.hours;
-    $("wrapped-days").textContent = d.days;
+    countUp($("wrapped-hours"), d.hours, { ms: 1000, delay: 530 });
+    countUp($("wrapped-days"), d.days, { ms: 1000, delay: 610 });
     $("wrapped-days-label").textContent = d.days === 1 ? "day" : "days";
     var box = $("wrapped-details");
     box.textContent = "";
@@ -1143,16 +1230,19 @@
     chip.setAttribute("aria-label", plural(st.current, "day") + " in a row" +
       (st.current && !st.today ? ". Watch an episode today to keep it going" : "") + ". Open the watch calendar");
     $("menu-streak").textContent = st.current ? "🔥 " + st.current : "";
-    if (lastStreak !== null && st.current > lastStreak) pop(chip);
+    if (lastStreak !== null && st.current > lastStreak) {
+      pop(chip);
+      setTimeout(function () { chip.classList.remove("pop"); }, 900); // then the flame goes back to flickering
+    }
     lastStreak = st.current;
   }
 
   function calLevel(count) { return count >= 5 ? 4 : count >= 3 ? 3 : count; }
   function renderCalendar() {
     var log = myLog(), st = streaks(log);
-    $("cal-current").textContent = st.current;
-    $("cal-longest").textContent = st.longest;
-    $("cal-days").textContent = st.count;
+    countUp($("cal-current"), st.current, { ms: 700, delay: 150 });
+    countUp($("cal-longest"), st.longest, { ms: 700, delay: 220 });
+    countUp($("cal-days"), st.count, { ms: 700, delay: 290 });
     $("cal-days-label").textContent = st.count === 1 ? "day watched" : "days watched";
 
     var today = startOfToday(), todayKey = dayKey(today);
@@ -1193,6 +1283,8 @@
           if (k === cal.selected) { cell.classList.add("selected"); cell.setAttribute("aria-pressed", "true"); }
           else cell.setAttribute("aria-pressed", "false");
         }
+        cell.style.setProperty("--w", w); // for the wave when the sheet opens
+        cell.style.setProperty("--d", i);
         grid.appendChild(cell);
       }
     }
@@ -1246,7 +1338,12 @@
       cell.setAttribute("aria-pressed", "true");
       renderCalDay(myLog());
     });
-    function openCalendar() { cal.selected = ""; renderCalendar(); openDialog($("calendar-sheet")); }
+    function openCalendar() {
+      cal.selected = "";
+      resetCounts(["cal-current", "cal-longest", "cal-days"]);
+      renderCalendar();
+      openDialog($("calendar-sheet"));
+    }
     $("menu-calendar").addEventListener("click", openCalendar);
     $("streak-chip").addEventListener("click", openCalendar);
   }
@@ -1379,6 +1476,7 @@
     RANKS.forEach(function (k, i) {
       var row = document.createElement("div");
       row.className = "row rank-step" + (i < r ? " done" : i === r ? " current" : "");
+      row.style.setProperty("--i", i);
       var dot = document.createElement("span"); dot.className = "rank-step-dot"; dot.setAttribute("aria-hidden", "true");
       var l = document.createElement("span"); l.className = "row-label"; l.textContent = k.name;
       var v = document.createElement("span"); v.className = "row-value";
@@ -1408,6 +1506,7 @@
       if (got) card.type = "button";
       card.dataset.id = b.id;
       card.className = "award" + (got ? " earned" : "");
+      card.style.setProperty("--i", grid.children.length);
       var icon = document.createElement("span"); icon.className = "award-icon"; icon.textContent = b.icon; icon.setAttribute("aria-hidden", "true");
       var name = document.createElement("span"); name.className = "award-name";
       var shown = badgeName(b);
@@ -1459,16 +1558,26 @@
     var mine = myCanon(), total = canonEpisodes.length;
     var rows = [{ name: "You", c: mine, me: true }].concat(people.map(function (m) { return { name: m.name, c: memberCanon(m) }; }));
     var box = $("race-rows");
-    box.textContent = "";
-    rows.forEach(function (p) {
-      var row = document.createElement("span"); row.className = "race-row" + (p.me ? " me" : "");
-      var name = document.createElement("span"); name.className = "race-name"; name.textContent = p.name;
-      var track = document.createElement("span"); track.className = "race-track";
-      var fill = document.createElement("span"); fill.className = "race-fill"; fill.style.width = (p.c / total * 100) + "%";
-      track.appendChild(fill);
-      var count = document.createElement("span"); count.className = "race-count"; count.textContent = p.c;
-      row.appendChild(name); row.appendChild(track); row.appendChild(count);
-      box.appendChild(row);
+    var key = rows.map(function (p) { return p.name; }).join("\n");
+    if (box.dataset.key !== key) { // someone joined, left or changed their name: rebuild
+      box.dataset.key = key;
+      box.textContent = "";
+      rows.forEach(function (p) {
+        var row = document.createElement("span"); row.className = "race-row" + (p.me ? " me" : "");
+        var name = document.createElement("span"); name.className = "race-name"; name.textContent = p.name;
+        var track = document.createElement("span"); track.className = "race-track";
+        var fill = document.createElement("span"); fill.className = "race-fill"; fill.style.width = "0%";
+        track.appendChild(fill);
+        var count = document.createElement("span"); count.className = "race-count";
+        row.appendChild(name); row.appendChild(track); row.appendChild(count);
+        box.appendChild(row);
+      });
+      void box.offsetWidth; // start the bars at zero so they grow in
+    }
+    rows.forEach(function (p, i) { // the bars slide to the new numbers
+      var row = box.children[i];
+      row.querySelector(".race-fill").style.width = (p.c / total * 100) + "%";
+      countUp(row.querySelector(".race-count"), p.c, { ms: 500 });
     });
     var lead = rows.slice(1).sort(function (a, b) { return b.c - a.c; })[0];
     var diff = mine - lead.c, text;
@@ -1510,6 +1619,7 @@
       SONG_LIST[kind].forEach(function (s, i) {
         var row = document.createElement("div");
         row.className = "row song-row" + (now >= s[0] && now <= s[1] ? " now" : "");
+        row.style.setProperty("--i", i);
         var main = document.createElement("button");
         main.type = "button";
         main.className = "song-main";
@@ -1521,7 +1631,11 @@
         text.appendChild(title); text.appendChild(sub);
         main.appendChild(num); main.appendChild(text);
         if (now >= s[0] && now <= s[1]) {
-          var pill = document.createElement("span"); pill.className = "song-now"; pill.textContent = "Now";
+          var pill = document.createElement("span"); pill.className = "song-now";
+          var eq = document.createElement("span"); eq.className = "eq"; eq.setAttribute("aria-hidden", "true");
+          eq.appendChild(document.createElement("i")); eq.appendChild(document.createElement("i")); eq.appendChild(document.createElement("i"));
+          pill.appendChild(eq);
+          pill.appendChild(document.createTextNode("Now"));
           main.appendChild(pill);
         }
         main.setAttribute("aria-label", (kind === "op" ? "Opening " : "Ending ") + (i + 1) + ": " + s[2] + " by " + s[4] + ", episodes " + s[0] + " to " + s[1] + ". Jump to episode " + s[0]);
@@ -1556,7 +1670,7 @@
       b.setAttribute("aria-checked", String(Number(b.dataset.min) === minutes));
     });
     var eps = planEpisodes();
-    $("plan-count").textContent = eps.length;
+    countUp($("plan-count"), eps.length, { ms: 350 });
     $("plan-count-label").textContent = eps.length === 1 ? "episode" : "episodes";
     var end = new Date(Date.now() + eps.length * MINUTES_PER_EPISODE * 60000);
     $("plan-end").textContent = eps.length ? "Done around " + end.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : "";
@@ -1616,7 +1730,15 @@
     $("plan-open").addEventListener("click", openPlan);
     $("menu-plan").addEventListener("click", openPlan);
     $("plan-done").addEventListener("click", finishPlan);
-    function openRank() { renderRankSheet(); openDialog($("rank-sheet")); }
+    function openRank() {
+      renderRankSheet();
+      openDialog($("rank-sheet"));
+      var bar = $("rank-bar"), width = bar.style.width; // grow the bar from empty
+      if (!reduceMotion()) {
+        bar.style.width = "0%";
+        requestAnimationFrame(function () { requestAnimationFrame(function () { bar.style.width = width; }); });
+      }
+    }
     $("rank-chip").addEventListener("click", openRank);
     $("menu-rank").addEventListener("click", openRank);
     $("race").addEventListener("click", openRank);
@@ -1630,6 +1752,11 @@
         deck.revealed = {};
         renderDeckMode();
         renderDeck();
+        if (!reduceMotion() && !deckBusy) { // the card flips over to the other "next"
+          var card = $("deck-card").hidden ? $("deck-empty") : $("deck-card");
+          replay(card, "flip");
+          setTimeout(function () { card.classList.remove("flip"); }, 600);
+        }
       });
     });
     checkBadges();
@@ -1645,21 +1772,36 @@
   ];
   function themeOf(id) { return THEMES.filter(function (t) { return t.id === id; })[0] || THEMES[0]; }
   /** Sets the theme on the page (the inline script in index.html does it before the first paint too). */
-  function applyTheme(fade) {
+  /** animate: the new colours spread in a circle from origin ({x, y} on screen), where the
+   *  browser can do that (View Transitions); otherwise they fade over. */
+  function applyTheme(animate, origin) {
     var t = themeOf(prefs.theme), root = document.documentElement;
-    if (fade && !reduceMotion()) {
-      root.classList.add("theme-fade");
-      clearTimeout(applyTheme.timer);
-      applyTheme.timer = setTimeout(function () { root.classList.remove("theme-fade"); }, 500);
+    function set() {
+      var id = themeOf(prefs.theme).id; // the latest choice, if this runs a frame later
+      if (id === "naruto") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", id);
+      // the browser's bar colour follows the theme's background
+      var cs = getComputedStyle(root);
+      document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) {
+        var dark = (m.getAttribute("media") || "").indexOf("dark") !== -1;
+        var v = cs.getPropertyValue(dark ? "--bg-dark" : "--bg-light").trim();
+        if (v) m.setAttribute("content", v);
+      });
     }
-    if (t.id === "naruto") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", t.id);
-    // the browser's bar colour follows the theme's background
-    var cs = getComputedStyle(root);
-    document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) {
-      var dark = (m.getAttribute("media") || "").indexOf("dark") !== -1;
-      var v = cs.getPropertyValue(dark ? "--bg-dark" : "--bg-light").trim();
-      if (v) m.setAttribute("content", v);
-    });
+    if (animate && !reduceMotion() && document.startViewTransition) {
+      root.style.setProperty("--vt-x", (origin ? origin.x : window.innerWidth / 2) + "px");
+      root.style.setProperty("--vt-y", (origin ? origin.y : window.innerHeight / 2) + "px");
+      root.classList.add("theme-reveal");
+      var turn = applyTheme.turn = (applyTheme.turn || 0) + 1;
+      var done = function () { if (applyTheme.turn === turn) root.classList.remove("theme-reveal"); };
+      try { document.startViewTransition(set).finished.then(done, done); } catch (e) { set(); done(); }
+    } else {
+      if (animate && !reduceMotion()) {
+        root.classList.add("theme-fade");
+        clearTimeout(applyTheme.timer);
+        applyTheme.timer = setTimeout(function () { root.classList.remove("theme-fade"); }, 500);
+      }
+      set();
+    }
     $("menu-theme-value").textContent = t.name;
     Array.prototype.forEach.call($("theme-list").children, function (b) {
       b.setAttribute("aria-checked", String(b.dataset.themePreview === t.id));
@@ -1684,7 +1826,8 @@
         if (themeOf(prefs.theme).id === t.id) return;
         prefs.theme = t.id;
         savePrefs();
-        applyTheme(true);
+        var r = sw.getBoundingClientRect();
+        applyTheme(true, { x: r.left + r.width / 2, y: r.top + r.height / 2 });
         pop(sw);
       });
       $("theme-list").appendChild(b);
@@ -2246,7 +2389,7 @@
         var n = epSheet.n, on = !(notes[n] && notes[n].e === r[0]);
         setNote(n, { e: on ? r[0] : "" });
         renderEpSheet();
-        if (on) pop(b);
+        if (on) { pop(b); floatEmoji(b, r[0]); }
       });
       $("ep-sheet-reactions").appendChild(b);
     });
@@ -2494,7 +2637,11 @@
     $("menu-bulk").addEventListener("click", openBulk);
     $("menu-guide").addEventListener("click", function () { openDialog($("guide-sheet")); });
     $("menu-top").addEventListener("click", function () { renderTop(); openDialog($("top-sheet")); });
-    $("menu-wrapped").addEventListener("click", function () { renderWrapped(); openDialog($("wrapped-sheet")); });
+    $("menu-wrapped").addEventListener("click", function () {
+      resetCounts(["wrapped-count", "wrapped-hours", "wrapped-days"]);
+      renderWrapped();
+      openDialog($("wrapped-sheet"));
+    });
     $("wrapped-share").addEventListener("click", shareWrapped);
     $("menu-export").addEventListener("click", function () { closeDialog($("menu-sheet")); exportBackup(); });
     $("menu-import").addEventListener("click", function () { $("restore-file").click(); });

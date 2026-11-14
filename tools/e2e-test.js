@@ -357,7 +357,7 @@ const collapse = (nums) => {
     await page.click("#bulk-unwatch");
 
     // Light and dark mode follow the device
-    const bgOf = async (scheme) => { await page.emulateMedia({ colorScheme: scheme }); return page.evaluate(() => getComputedStyle(document.body).backgroundColor); };
+    const bgOf = async (scheme) => { await page.emulateMedia({ colorScheme: scheme }); return page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor); };
     check("theme: light mode", (await bgOf("light")) === "rgb(242, 242, 247)", await bgOf("light"));
     check("theme: dark mode", (await bgOf("dark")) === "rgb(0, 0, 0)", await bgOf("dark"));
     await page.emulateMedia({ colorScheme: "light" });
@@ -443,6 +443,10 @@ const collapse = (nums) => {
     check("animations: with Reduce Motion the card changes at once", (await waitFor(async () => (await page.textContent("#deck-num")) !== beforeReduced, 350)) === true); // well under the 460 ms animation
     check("animations: with Reduce Motion nothing animates", (await page.$eval("#deck-card", (el) => getComputedStyle(el).transitionDuration)) === "0s" || (await page.$eval("#deck-card", (el) => getComputedStyle(el).transitionProperty)) === "none");
     await page.click(".toast-action");
+    await openMenu();
+    await page.click("#menu-wrapped");
+    check("animations: with Reduce Motion numbers don't count up", !(await page.evaluate(() => !!document.querySelector("#wrapped-sheet .counting"))));
+    await closeSheets();
     await page.emulateMedia({ reducedMotion: "no-preference" });
 
     // Spoiler shield
@@ -499,6 +503,8 @@ const collapse = (nums) => {
     check("notes: details show six reactions and a note field", (await page.locator("#ep-sheet-reactions .reaction").count()) === 6 && await page.isVisible("#ep-sheet-note"));
     await page.click('#ep-sheet-reactions [data-e="😭"]');
     check("notes: tapping a reaction selects it", (await page.getAttribute('#ep-sheet-reactions [data-e="😭"]', "aria-pressed")) === "true");
+    check("animations: the reaction floats up from the button", (await page.locator("#ep-sheet .float-emoji").count()) === 7);
+    check("animations: the floating emoji clean up after themselves", (await waitFor(async () => (await page.locator("#ep-sheet .float-emoji").count()) === 0, 4000)) === true);
     await page.click('#ep-sheet-reactions [data-e="🔥"]');
     check("notes: only one reaction at a time", (await page.locator('#ep-sheet-reactions [aria-pressed="true"]').count()) === 1 && (await page.getAttribute('#ep-sheet-reactions [data-e="🔥"]', "aria-pressed")) === "true");
     await page.click('#ep-sheet-reactions [data-e="🔥"]');
@@ -519,6 +525,11 @@ const collapse = (nums) => {
     await closeSheets();
     await openMenu();
     await page.click("#menu-wrapped");
+    check("animations: Wrapped's numbers count up (the real text is final at once)", await page.evaluate(() => {
+      const el = document.getElementById("wrapped-count");
+      return el.classList.contains("counting") && el.hasAttribute("data-shown") && Number(el.textContent) > 0;
+    }));
+    check("animations: the count-up ends on the real number", (await waitFor(() => page.evaluate(() => !document.querySelector("#wrapped-sheet .counting")), 4000)) === true);
     check("notes: Wrapped shows your go-to reaction", (await page.textContent("#wrapped-details")).includes("Go-to reaction") && (await page.textContent("#wrapped-details")).includes("😭"));
     await closeSheets();
 
@@ -529,8 +540,11 @@ const collapse = (nums) => {
     check("theme: five themes, Naruto selected", (await page.locator("#theme-list .theme-option").count()) === 5 && (await page.getAttribute('#theme-list [data-theme-preview="naruto"]', "aria-checked")) === "true");
     await page.click('#theme-list [data-theme-preview="akatsuki"]');
     const accentNow = () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--accent").trim());
+    check("theme: the new colors spread from the swatch (where the browser supports it)", await page.evaluate(() => !document.startViewTransition || document.documentElement.classList.contains("theme-reveal")));
+    await waitFor(async () => (await page.getAttribute("html", "data-theme")) === "akatsuki", 3000); // the switch lands a frame later
     check("theme: Akatsuki recolors the app", (await page.getAttribute("html", "data-theme")) === "akatsuki" && (await accentNow()) === "#d42a35" &&
-      (await page.evaluate(() => getComputedStyle(document.body).backgroundImage)).startsWith('url("data:image/svg+xml'));
+      (await page.evaluate(() => getComputedStyle(document.body, "::before").backgroundImage)).startsWith('url("data:image/svg+xml'));
+    check("theme: the pattern drifts", (await page.evaluate(() => getComputedStyle(document.body, "::before").animationName)) === "drift-x");
     check("theme: the browser bar color follows", (await page.getAttribute('meta[name="theme-color"][media*="light"]', "content")) === "#f4f1f1");
     check("theme: the picker and menu show it", (await page.getAttribute('#theme-list [data-theme-preview="akatsuki"]', "aria-checked")) === "true" && (await page.textContent("#menu-theme-value")) === "Akatsuki");
     await page.reload();
@@ -577,6 +591,8 @@ const collapse = (nums) => {
     await openMenu();
     await page.click("#menu-theme");
     await page.click('#theme-list [data-theme-preview="naruto"]');
+    await waitFor(() => page.evaluate(() => !document.documentElement.hasAttribute("data-theme")), 3000);
+    await waitFor(() => page.evaluate(() => !document.documentElement.classList.contains("theme-reveal")), 3000);
     check("theme: back to Naruto", !(await page.evaluate(() => document.documentElement.hasAttribute("data-theme"))) && (await accentNow()) === "#f68b22" && (await page.getAttribute('meta[name="theme-color"][media*="light"]', "content")) === "#f2f2f7");
     await closeSheets();
 
@@ -657,6 +673,11 @@ const collapse = (nums) => {
       check("calendar: current 3, longest 3, 5 days watched", (await p.textContent("#cal-current")) === "3" && (await p.textContent("#cal-longest")) === "3" && (await p.textContent("#cal-days")) === "5",
         [await p.textContent("#cal-current"), await p.textContent("#cal-longest"), await p.textContent("#cal-days")].join("/"));
       check("calendar: 18 weeks of days", (await p.locator("#cal-grid .cal-cell").count()) === 18 * 7);
+      check("animations: the calendar fills in week by week", await p.evaluate(() => {
+        const cells = document.querySelectorAll("#cal-grid .cal-cell");
+        const first = getComputedStyle(cells[0]), last = getComputedStyle(cells[cells.length - 1]);
+        return first.animationName === "cell-in" && parseFloat(last.animationDelay) > parseFloat(first.animationDelay);
+      }));
       check("calendar: today is shaded and selected, with its episodes listed", (await p.getAttribute("#cal-grid .cal-cell.today", "data-level")) === "2" &&
         (await p.getAttribute("#cal-grid .cal-cell.today", "aria-pressed")) === "true" && (await p.textContent("#cal-day-title")) === "Today" && (await p.locator("#cal-day-list .top-item").count()) === 2);
       const yesterday = await p.evaluate(() => { const d = new Date(); d.setDate(d.getDate() - 1); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); });
@@ -765,6 +786,7 @@ const collapse = (nums) => {
       await p.click("#menu-open");
       await p.click("#menu-songs");
       check("songs: 9 openings and 15 endings", (await p.locator("#op-list .song-row").count()) === 9 && (await p.locator("#ed-list .song-row").count()) === 15);
+      check("animations: equalizer bars on the current songs", (await p.locator("#op-list .song-row.now .eq i").count()) === 3 && (await p.evaluate(() => getComputedStyle(document.querySelector("#op-list .eq i")).animationName)) === "eq");
       check("songs: marks the ones playing now", (await p.textContent("#op-list .song-row.now")).includes("Kanashimi") && (await p.textContent("#ed-list .song-row.now")).includes("Viva"));
       check("songs: ▶ searches YouTube", (await p.getAttribute("#op-list .song-row:first-child .song-play", "href")).startsWith("https://www.youtube.com/results?search_query=Naruto%20opening%201"));
       await p.click("#ed-list .song-row:nth-child(10) .song-main");

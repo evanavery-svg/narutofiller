@@ -32,6 +32,15 @@ To keep things simple, the site sorts episodes into just two categories:
     - **⋯ → Startup animation** turns it off.
   - **Logo:** the leaf draws itself when the app opens. Tap it for a spin.
   - **Elsewhere:** the Skip-Filler Guide's map fills in as a wave, and Naruto Wrapped and the arc-complete card build in piece by piece.
+  - **Themes:** switching theme spreads the new colors out in a circle from the swatch you tapped (in browsers with View Transitions; others fade). Akatsuki's clouds, Sharingan's tomoe and Hidden Sand's dunes drift slowly in the background.
+  - **Rank up:** the headband drops in and catches the light, rings of chakra burst from behind it, and leaves drift down the screen with the confetti.
+  - **Numbers count up:** in Wrapped, the Watch Calendar, Plan Tonight and the race. The headline counts too when it jumps by more than one (Mark Several, a plan, a restore). The real text is final at once, so screen readers never hear the in-between numbers.
+  - **Reactions:** the emoji you pick floats up from its button.
+  - **Streak:** the flame flickers while today is covered, and flares when the streak grows.
+  - **Calendar, ranks and badges:** the calendar fills in week by week and today pulses, the rank ladder lights up rung by rung and its bar grows, and badges rise in one after another.
+  - **Songs:** equalizer bars bounce on the songs playing where you are, and the note on a "New opening" flag bops.
+  - **Shared list:** the race bars grow in and slide as numbers change, and the up-next card flips over when you switch between **Just Me** and **With Sara**.
+  - **Share images and badges:** the preview flips in like a card, and the "Badge earned" banner drops in with a glint.
 - **Up-next card.** A big card shows the next episode to watch: its arc, number and title, colored **green for canon** and **red for filler**. Two more cards peek out behind it, like a deck.
   - **Watched** flips the card away to the right and brings up the next one.
   - **Skip** flips it away to the left and marks the episode as *skipped*. It won't come back, and it isn't counted as watched.
@@ -381,7 +390,11 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
 - **Animations:**
   - the selector's thumb follows the choice
   - **Watched** stamps the card before it flies, and the next card comes up
-  - with Reduce Motion on, the card changes at once and nothing animates
+  - with Reduce Motion on, the card changes at once, nothing animates and numbers don't count up
+  - a picked reaction floats up as seven emoji that remove themselves
+  - Wrapped's numbers count up while the real text is already final, and end on the real number
+  - switching theme uses the circular reveal where the browser supports it, and the pattern drifts
+  - the calendar fills in week by week, and the current songs have equalizer bars
 - **Your name:**
   - the first launch asks for it, and **Not Now** isn't asked again
   - **⋯ → Your Name** changes it
@@ -451,7 +464,7 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
 
 - **Sharing switched off:** the card explains that sharing isn't set up (or, on `file://`, that it needs the hosted site).
 
-`node tools/monkey-test.js [seed] [steps]` does hundreds of random actions against a local server (`python3 -m http.server 8000`) and checks after each one that the screen matches the saved data. It also leaves random reactions and notes, opens the calendar, rank and song lists, plans tonight, switches themes, makes share images, and checks that the rank matches the canon count. Twenty-seven runs of 200–250 steps each found no mismatches and no JavaScript errors.
+`node tools/monkey-test.js [seed] [steps]` does hundreds of random actions against a local server (`python3 -m http.server 8000`) and checks after each one that the screen matches the saved data. It also leaves random reactions and notes, opens the calendar, rank and song lists, plans tonight, switches themes, makes share images, and checks that the rank matches the canon count. Thirty runs of 200–250 steps each found no mismatches and no JavaScript errors.
 
 **Speed.** Measured with the CPU slowed 4× (roughly a mid-range phone), every tap responds in under about 100 ms. Typing in search went from 360 ms to 80 ms, and opening the Skip-Filler Guide from 232 ms to 64 ms. What makes the difference:
 - Rows animate only when an arc unfolds, not whenever a filter or search shows them again.
@@ -499,7 +512,7 @@ It checks:
 - **Leave:** stopping sharing, and staying left after a reload.
 - **Security rules:** listing rooms, malformed codes, unexpected fields, deletes, and other collections are all refused.
 
-The last runs passed all 291 checks in `e2e-test.js` and all 78 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 95** in light mode (performance was 97–99 before the startup animation, which covers the first two seconds), and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
+The last runs passed all 300 checks in `e2e-test.js` and all 78 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 95** in light mode (performance was 97–99 before the startup animation, which covers the first two seconds), and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
 
 ## Legal
 
