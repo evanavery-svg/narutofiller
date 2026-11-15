@@ -23,6 +23,8 @@ eps.forEach((e, i) => {
   if (!TYPES.includes(e.type)) errors.push(`episode ${e.number}: invalid type "${e.type}"`);
   if (typeof e.title !== "string" || !e.title.trim()) errors.push(`episode ${e.number}: missing title`);
   if (typeof e.arc !== "string" || !e.arc.trim()) errors.push(`episode ${e.number}: missing arc`);
+  if (typeof e.desc !== "string" || e.desc.trim().length < 40) errors.push(`episode ${e.number}: missing description`);
+  else if (e.desc.length > 180) errors.push(`episode ${e.number}: description longer than 180 characters`);
 });
 for (let n = 1; n <= 220; n++) if (!seen.has(n)) errors.push(`missing episode ${n}`);
 

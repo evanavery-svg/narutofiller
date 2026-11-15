@@ -45,7 +45,7 @@ To keep things simple, the site sorts episodes into just two categories:
   - **Songs:** equalizer bars bounce on the songs playing where you are, and the note on a "New opening" flag bops.
   - **Shared list:** the race bars grow in and slide as numbers change, and the up-next card flips over when you switch between **Just Me** and **With Sara**.
   - **Share images and badges:** the preview flips in like a card, and the "Badge earned" banner drops in with a glint.
-- **Up-next card.** A big card shows the next episode to watch: its arc, number and title, colored **green for canon** and **red for filler**. Two more cards peek out behind it, like a deck.
+- **Up-next card.** A big card shows the next episode to watch: its arc, number, title and a short description, colored **green for canon** and **red for filler**. Two more cards peek out behind it, like a deck.
   - **Watched** flips the card away to the right and brings up the next one.
   - **Skip** flips it away to the left and marks the episode as *skipped*. It won't come back, and it isn't counted as watched.
   - Both show a message with **Undo**.
@@ -65,7 +65,7 @@ To keep things simple, the site sorts episodes into just two categories:
 - **Notes and reactions.** In an episode's **ⓘ** details, react with one of 🔥 😭 😂 😮 😡 💤 (hype, sad, funny, shocked, angry, boring) and leave a short note (up to 280 characters).
   - Reactions show next to the episode in the list, and a small speech bubble means someone left a note.
   - On a shared list, everyone sees everyone else's reactions and notes in the details panel, and the activity line adds the other person's reaction ("Sara watched Ep 45 😭 · 2h ago").
-  - With the spoiler shield on, other people's notes on episodes you haven't watched are blurred until you tap **Show title**.
+  - With the spoiler shield on, other people's notes on episodes you haven't watched are blurred until you tap **Show title and summary**.
   - **⋯ → Ratings & Favorites** lists every episode with a note or reaction.
 - **Watch calendar and streaks** (**⋯ → Watch Calendar**, or tap the 🔥 chip next to your progress).
   - A heatmap of the last 18 weeks: the more episodes you watched that day, the deeper the orange. Tap a day to see what you watched (and, on a shared list, what the others watched).
@@ -83,9 +83,10 @@ To keep things simple, the site sorts episodes into just two categories:
   - Time left counts the episodes still ahead of you, at about 23 minutes each.
   - The pace uses the episodes you've marked one at a time in the last two weeks; **Mark Several** and other bulk changes don't count.
   - It says "the series" instead of "canon" when **Skip filler when continuing** is off.
-- **Spoiler shield.** Turn it on in the **⋯** menu to blur the titles of episodes you haven't watched: in the list, on the up-next card, in **Ratings & Favorites**, and in the map's tooltips. It also blurs the names of arcs you haven't started (no episode watched or skipped yet): in the list's arc headers, on the up-next card and in an episode's details. The finished-arc card says "Next up: the next arc" instead of naming it.
+- **Episode descriptions.** Every episode has a short summary of its setup (who's involved and what starts the story) that leaves out how it ends. It shows on the up-next card and at the top of an episode's details. Search matches it too, so `gamabunta` or `curry` finds the right episodes.
+- **Spoiler shield.** Turn it on in the **⋯** menu to blur the titles and descriptions of episodes you haven't watched: in the list, on the up-next card, in **Ratings & Favorites**, and in the map's tooltips. It also blurs the names of arcs you haven't started (no episode watched or skipped yet): in the list's arc headers, on the up-next card and in an episode's details. The finished-arc card says "Next up: the next arc" instead of naming it.
   - The first tap on the up-next card reveals its title.
-  - The details (**ⓘ**) panel has a **Show title** button.
+  - The details (**ⓘ**) panel has a **Show title and summary** button.
   - Watched titles stay readable.
 - **Arc complete.** Finishing an arc with a single tick, on the card, a row or in the details, shows confetti and a card ("Land of Waves complete! 19 episodes watched · your average ★ 4.0. Next up: Chūnin Exams."). Marking many at once doesn't celebrate. While skipping filler, an arc counts as finished once its canon episodes are done.
 - **Naruto Wrapped** (**⋯** menu). A summary card you can share:
@@ -105,7 +106,7 @@ To keep things simple, the site sorts episodes into just two categories:
   - Each episode's details show everyone's status, with a button to mark it for them.
 - **Color-coded episodes.** Every row has a green (canon) or red (filler) stripe and episode number. Filler episodes also get a red **Filler** tag. Skipped episodes show a dash in their circle.
 - **All / Canon / Filler.** A segmented control above the list shows everything, only canon, or only filler.
-- **Search.** One box that matches the episode number (`135`, `#135`, `ep 135`) or any part of the title. It ignores case and updates as you type. It works together with the filters.
+- **Search.** One box that matches the episode number (`135`, `#135`, `ep 135`) or any part of the title or description. It ignores case and updates as you type. It works together with the filters.
 - **Watch tracker.**
   - A round checkbox on each episode, saved in `localStorage`. Tapping anywhere on the row (the number or title too) ticks it.
   - Progress headline and bar for **canon** episodes ("29 of 130 canon watched"), with the all-episodes count ("30 of 220 total") and how many you skipped underneath.
@@ -290,6 +291,8 @@ From then on:
 
 **Theme songs** come from the Fandom wiki too: each episode page's `opening song` and `ending song` fields (retrieved 2026-11-14), with each song's page for its Japanese title and artist. They're stored as ranges in `SONGS` at the end of `data/episodes.js`. Episode 161's page lists no songs; it falls inside the ranges the song pages give (opening 7, ending 11).
 
+**Descriptions** (the `desc` field) were written for this app from the plot synopses on each episode's Fandom wiki page (retrieved 2026-11-15). They're one or two sentences, at most 180 characters, and describe the setup without the outcome. `validate-data.js` checks that every episode has one.
+
 **Manga chapters** for each episode also come from the Fandom wiki (each episode page's `chapters` field). The 90 filler episodes have none.
 
 **Arcs** come from the Fandom wiki: each episode page names its arc. Names are shortened ("Chūnin Exams (Arc)" → "Chūnin Exams", "Prologue — Land of Waves" → "Land of Waves"). The 14 episodes with no arc listed are grouped as "Standalone". A section counts as a filler arc when most of its episodes are filler. Three mixed episodes sit at the start of filler arcs: 141 (Land of Rice Fields Investigation Mission), 142 (Mizuki Tracking Mission) and 220 (Sunagakure Support Mission).
@@ -349,7 +352,7 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
 - **Data:** each type's episode list matches Anime Filler List's published range lists, every episode has an arc, and the openings and endings cover 1–220 (`node tools/validate-data.js`).
 - **`file://`:** the page renders, has no errors, doesn't try to register a service worker, and keeps watched episodes.
 - **All / Canon / Filler:** each option shows the right episodes, and a search with no matches shows an empty state.
-- **Search:** case-insensitive title matches, number matches, and search combined with the filler filter.
+- **Search:** case-insensitive title and description matches, number matches, and search combined with the filler filter.
 - **Tracker:**
   - both progress counts
   - the next episode, with and without skipping filler
@@ -415,10 +418,11 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
 - **Spoiler shield:**
   - unwatched titles blur while watched ones don't
   - the up-next card reveals its title on the first tap
-  - the details panel's **Show title** works
+  - the up-next card and the details panel blur the description too, and hide it from screen readers
+  - the details panel's **Show title and summary** works
   - turning it off shows everything
   - names of arcs you haven't started blur, and started ones don't
-  - details blur the arc name too, and **Show title** reveals it
+  - details blur the arc name too, and **Show title and summary** reveals it
   - watching an episode reveals its arc's name, and unwatching blurs it again
 - **Notes and reactions:**
   - six reactions and a note field in the details
@@ -519,7 +523,7 @@ It checks:
 - **Leave:** stopping sharing, and staying left after a reload.
 - **Security rules:** listing rooms, malformed codes, unexpected fields, deletes, and other collections are all refused.
 
-The last runs passed all 308 checks in `e2e-test.js` and all 78 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 95** in light mode (performance was 97–99 before the startup animation, which covers the first two seconds), and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
+The last runs passed all 315 checks in `e2e-test.js` and all 78 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 95** in light mode (performance was 97–99 before the startup animation, which covers the first two seconds), and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
 
 ## Legal
 

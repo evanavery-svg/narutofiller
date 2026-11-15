@@ -176,13 +176,15 @@ const collapse = (nums) => {
     // Search combined with filter (filler only)
     await page.fill("#search", "KAKASHI"); await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r()))); // search redraws on the next frame
     v = await visibleNums();
-    const expectKakashiFiller = E.filter((e) => e.type === "filler" && e.title.toLowerCase().includes("kakashi")).map((e) => e.number);
+    const expectKakashiFiller = E.filter((e) => e.type === "filler" && (e.title + " " + e.desc).toLowerCase().includes("kakashi")).map((e) => e.number);
     check("search+filter: 'KAKASHI' within filler (case-insensitive)", JSON.stringify(v) === JSON.stringify(expectKakashiFiller), v.join(","));
     await show("all");
     await page.fill("#search", "kakashi"); await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r()))); // search redraws on the next frame
     v = await visibleNums();
-    const expectKakashi = E.filter((e) => e.title.toLowerCase().includes("kakashi")).map((e) => e.number);
+    const expectKakashi = E.filter((e) => (e.title + " " + e.desc).toLowerCase().includes("kakashi")).map((e) => e.number);
     check("search: 'kakashi' all types", JSON.stringify(v) === JSON.stringify(expectKakashi), v.length);
+    await page.fill("#search", "gamabunta"); await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r()))); // search redraws on the next frame
+    check("search: matches words in the descriptions", JSON.stringify(await visibleNums()) === JSON.stringify(E.filter((e) => e.desc.includes("Gamabunta")).map((e) => e.number)) && (await visibleNums()).length >= 3);
     await page.fill("#search", "135"); await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r()))); // search redraws on the next frame
     check("search: number '135'", JSON.stringify(await visibleNums()) === "[135]");
     await page.fill("#search", "#7"); await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r()))); // search redraws on the next frame
@@ -212,6 +214,7 @@ const collapse = (nums) => {
     check("tracker: bar tracks canon", (await page.getAttribute("#progress-canon-bar", "aria-valuenow")) === "3" && (await page.getAttribute("#progress-canon-bar", "aria-valuemax")) === "130");
     // Up-next card (skips filler by default)
     check("deck: shows episode 4 next", (await page.textContent("#deck-num")) === "Episode 4");
+    check("deck: shows the episode's summary", (await page.textContent("#deck-desc")) === E[3].desc && await page.isVisible("#deck-desc"));
     check("deck: shows its arc and title", (await page.textContent("#deck-arc")) === "Land of Waves" && (await page.textContent("#deck-title")) === E[3].title);
     check("deck: canon card is green", (await page.getAttribute("#deck-card", "data-kind")) === "canon" && (await page.textContent("#deck-kind")) === "Canon");
     for (let n = 4; n <= 25; n++) await page.check(`#ep-${n} input`);
@@ -365,6 +368,7 @@ const collapse = (nums) => {
     await expandAllArcs();
     await page.click("#ep-1 .ep-info");
     check("details: ⓘ opens episode 1", await isOpen("ep-sheet") && (await page.textContent("#ep-sheet-title")) === "Episode 1");
+    check("details: shows the episode's summary", (await page.textContent("#ep-sheet-desc")) === E[0].desc && await page.isVisible("#ep-sheet-desc"));
     check("details: arc and manga chapter", (await page.textContent("#ep-sheet-arc")) === "Land of Waves" && (await page.textContent("#ep-sheet-chapters")) === "Chapter 1");
     check("details: tapping ⓘ doesn't tick the row", !(await page.isChecked("#ep-1 input")));
     await page.click('#ep-sheet-stars .star[data-v="4"]');
@@ -456,14 +460,18 @@ const collapse = (nums) => {
     check("shield: unwatched titles are blurred", (await blurOf(`#ep-${firstUnwatched} .ep-title`)).includes("blur"));
     const someWatched = await page.evaluate(() => Number(document.querySelector(".episode.is-watched").id.slice(3)));
     check("shield: watched titles stay readable", (await blurOf(`#ep-${someWatched} .ep-title`)) === "none");
+    check("shield: the up-next summary is hidden", (await blurOf("#deck-desc")).includes("blur"));
     check("shield: the up-next title is hidden", (await page.locator("#deck-card.is-hidden-title").count()) === 1 && (await page.textContent("#deck-label")).includes("tap to reveal"));
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.click("#deck-find");
     check("shield: first tap on the card reveals its title", (await page.locator("#deck-card.is-hidden-title").count()) === 0);
+    check("shield: and its summary", (await blurOf("#deck-desc")) === "none");
     await page.click(`#ep-${firstUnwatched} .ep-info`);
+    check("shield: details hide the summary too", (await blurOf("#ep-sheet-desc")).includes("blur") && (await page.getAttribute("#ep-sheet-desc", "aria-hidden")) === "true");
     check("shield: details hide the title with a Show title button", (await page.locator("#ep-sheet-name.is-hidden-title").count()) === 1 && await page.isVisible("#ep-sheet-reveal"));
     await page.click("#ep-sheet-reveal");
     check("shield: Show title reveals it", (await page.locator("#ep-sheet-name.is-hidden-title").count()) === 0);
+    check("shield: Show title reveals the summary", (await blurOf("#ep-sheet-desc")) === "none" && (await page.getAttribute("#ep-sheet-desc", "aria-hidden")) === "false");
     await page.keyboard.press("Escape");
     await menuSwitch("spoiler-shield");
     check("shield: off again shows everything", (await blurOf(`#ep-${firstUnwatched} .ep-title`)) === "none");

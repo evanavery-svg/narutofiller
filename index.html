@@ -139,6 +139,7 @@
           <span id="deck-label" class="deck-label">Up next</span>
           <span id="deck-num" class="deck-num"></span>
           <span id="deck-title" class="deck-title"></span>
+          <span id="deck-desc" class="deck-desc"></span>
           <span id="deck-hint" class="deck-hint"></span>
           <span id="deck-song" class="deck-song" hidden></span>
         </button>
@@ -400,7 +401,8 @@
         <button type="button" class="sheet-close" data-close aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
       </div>
       <p id="ep-sheet-name" class="ep-sheet-name"></p>
-      <button type="button" id="ep-sheet-reveal" class="link-button reveal-button" hidden>Show title</button>
+      <p id="ep-sheet-desc" class="ep-sheet-desc"></p>
+      <button type="button" id="ep-sheet-reveal" class="link-button reveal-button" hidden>Show title and summary</button>
       <div class="segmented ep-state" id="ep-sheet-state" role="radiogroup" aria-label="Status">
         <button type="button" role="radio" data-state="none">Not Watched</button>
         <button type="button" role="radio" data-state="watched">Watched</button>

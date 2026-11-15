@@ -287,7 +287,7 @@
   }
 
   // Precomputed search text per episode
-  var searchIndex = EPISODES.map(function (ep) { return normalize(ep.title); });
+  var searchIndex = EPISODES.map(function (ep) { return normalize(ep.title + " \u0001 " + (ep.desc || "")); });
 
   // ---------- Build static UI ----------
   // "All / Canon / Filler" segmented control
@@ -814,10 +814,12 @@
     $("deck-kind").textContent = kind === "filler" ? "Filler" : "Canon";
     $("deck-num").textContent = "Episode " + ep.number;
     $("deck-title").textContent = ep.title;
+    $("deck-desc").textContent = ep.desc || "";
     var hide = prefs.shield && !deck.revealed[ep.number];
     $("deck-card").classList.toggle("is-hidden-title", hide);
+    $("deck-desc").setAttribute("aria-hidden", String(hide)); // a screen reader shouldn't read out a hidden summary
     $("deck-card").classList.toggle("is-hidden-arc", hide && !arcStarted(arcOf[ep.number - 1]));
-    $("deck-label").textContent = (us ? "Up next for all of you" : "Up next") + (hide ? " · tap to reveal the title" : "");
+    $("deck-label").textContent = (us ? "Up next for all of you" : "Up next") + (hide ? " · tap to reveal" : "");
     var already = sync.roomId && !us ? othersWho(ep.number) : [];
     // together: episodes before this one that you still need (the others have seen them)
     var catchUp = us ? upcoming(TOTAL).filter(function (e) { return e.number < ep.number; }).map(function (e) { return e.number; }) : [];
@@ -2307,6 +2309,9 @@
     var hideTitle = prefs.shield && !watched.has(n) && !epSheet.revealed;
     $("ep-sheet-name").classList.toggle("is-hidden-title", hideTitle);
     $("ep-sheet-reveal").hidden = !hideTitle;
+    $("ep-sheet-desc").textContent = ep.desc || "";
+    $("ep-sheet-desc").classList.toggle("is-hidden-title", hideTitle);
+    $("ep-sheet-desc").setAttribute("aria-hidden", String(hideTitle));
     $("ep-sheet-arc").textContent = ep.arc;
     $("ep-sheet-arc").classList.toggle("is-hidden-title", hideTitle && !arcStarted(arcOf[n - 1]));
     $("ep-sheet-op").textContent = songText("op", n);

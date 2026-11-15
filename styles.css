@@ -478,6 +478,10 @@ label.row { cursor: pointer; }
 .deck-label { font-size: 13px; font-weight: 600; opacity: 0.9; }
 .deck-num { font-size: 15px; font-weight: 600; opacity: 0.95; }
 .deck-title { margin: 0; font-family: var(--font-display); font-size: 26px; line-height: 1.2; font-weight: 700; letter-spacing: 0.005em; }
+.deck-desc {
+  font-size: 15px; line-height: 1.35; opacity: 0.92; text-wrap: pretty;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; line-clamp: 4; overflow: hidden;
+}
 .deck-hint { margin: 2px 0 0; font-size: 15px; opacity: 0.95; }
 .deck-actions { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }
 .deck-btn {
@@ -633,6 +637,8 @@ label.row { cursor: pointer; }
 .shield .episode:not(.is-watched) .ep-title,
 .shield .top-item.unwatched .row-label,
 .ep-sheet-name.is-hidden-title,
+.ep-sheet-desc.is-hidden-title,
+.deck-card.is-hidden-title .deck-desc,
 .deck-card.is-hidden-title .deck-title { filter: blur(7px); -webkit-user-select: none; user-select: none; }
 .deck-card.is-hidden-title .deck-title { filter: blur(12px); }
 /* arc names: blurred until you've started the arc */
@@ -687,6 +693,7 @@ label.row { cursor: pointer; }
   background: #1b7f3f;
 }
 .kind-pill[data-kind="filler"] { background: #c8221d; }
+.ep-sheet-desc { margin: -8px 0 16px; font-size: 16px; line-height: 1.4; color: var(--secondary); text-wrap: pretty; }
 .ep-sheet-name { margin: -6px 0 16px; font-family: var(--font-display); font-size: 22px; line-height: 1.25; font-weight: 700; }
 .ep-state { margin-bottom: 12px; }
 .rating-box { display: grid; gap: 6px; }
