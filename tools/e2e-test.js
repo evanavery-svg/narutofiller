@@ -530,7 +530,14 @@ const collapse = (nums) => {
       return el.classList.contains("counting") && el.hasAttribute("data-shown") && Number(el.textContent) > 0;
     }));
     check("animations: the count-up ends on the real number", (await waitFor(() => page.evaluate(() => !document.querySelector("#wrapped-sheet .counting")), 4000)) === true);
-    check("notes: Wrapped shows your go-to reaction", (await page.textContent("#wrapped-details")).includes("Go-to reaction") && (await page.textContent("#wrapped-details")).includes("😭"));
+    check("notes: one reaction isn't a go-to reaction yet", !(await page.textContent("#wrapped-details")).includes("Go-to reaction"));
+    await closeSheets();
+    await page.evaluate(() => document.querySelector("#ep-1 .ep-info").click());
+    await page.click('#ep-sheet-reactions [data-e="😭"]');
+    await closeSheets();
+    await openMenu();
+    await page.click("#menu-wrapped");
+    check("notes: Wrapped shows your go-to reaction", (await page.textContent("#wrapped-details")).includes("Go-to reaction") && (await page.textContent("#wrapped-details")).includes("😭 × 2"));
     await closeSheets();
 
     // Themes
@@ -792,6 +799,51 @@ const collapse = (nums) => {
       await p.click("#ed-list .song-row:nth-child(10) .song-main");
       check("songs: tapping one jumps to its first episode", !(await p.evaluate(() => document.getElementById("songs-sheet").open)) && (await waitFor(() => p.evaluate(() => { const r = document.getElementById("ep-142").getBoundingClientRect(); return r.top >= 0 && r.top < innerHeight; }), 3000)) === true);
       check("songs: no JS errors", errs.length === 0, errs.join(" | "));
+      await ctx.close();
+    }
+
+    // Phones: drag a sheet down to close it
+    {
+      const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, serviceWorkers: "block" });
+      await ctx.addInitScript(presetProfile);
+      const p = await ctx.newPage();
+      const errs = [];
+      p.on("pageerror", (e) => errs.push(e.message));
+      await p.goto(BASE);
+      const cdp = await ctx.newCDPSession(p);
+      const touch = (type, x, y) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: type === "touchEnd" ? [] : [{ x, y }] });
+      const drag = async (sel, dist, steps, pause) => {
+        const box = await p.locator(sel).boundingBox();
+        const x = box.x + box.width / 2, y = box.y + 40;
+        await touch("touchStart", x, y);
+        for (let i = 1; i <= steps; i++) { await touch("touchMove", x, y + (dist * i) / steps); await p.waitForTimeout(pause); }
+        return { x, y: y + dist };
+      };
+      await p.click("#menu-open");
+      await p.waitForTimeout(450);
+      let at = await drag("#menu-sheet", 60, 6, 40);
+      check("sheets: a drag down moves the sheet with your finger", await p.evaluate(() => /translateY\(5\dpx\)/.test(document.getElementById("menu-sheet").style.transform)), await p.evaluate(() => document.getElementById("menu-sheet").style.transform));
+      await touch("touchEnd", at.x, at.y);
+      await p.waitForTimeout(400);
+      check("sheets: a short, slow drag springs back", await p.evaluate(() => document.getElementById("menu-sheet").open && !document.getElementById("menu-sheet").style.transform));
+      at = await drag("#menu-sheet", 260, 8, 16);
+      await touch("touchEnd", at.x, at.y);
+      check("sheets: a long drag closes it", (await waitFor(() => p.evaluate(() => !document.getElementById("menu-sheet").open), 2000)) === true);
+      await p.click("#menu-open");
+      await p.waitForTimeout(450);
+      at = await drag("#menu-sheet", 70, 2, 10);
+      await touch("touchEnd", at.x, at.y);
+      check("sheets: a quick flick closes it", (await waitFor(() => p.evaluate(() => !document.getElementById("menu-sheet").open), 2000)) === true);
+      await p.click("#menu-open");
+      await p.waitForTimeout(400);
+      await p.click("#menu-songs");
+      await p.waitForTimeout(450);
+      await p.evaluate(() => { document.getElementById("songs-sheet").scrollTop = 300; });
+      check("sheets: (the songs sheet is scrolled down)", await p.evaluate(() => document.getElementById("songs-sheet").scrollTop > 0));
+      at = await drag("#songs-sheet", 200, 8, 16);
+      await touch("touchEnd", at.x, at.y);
+      check("sheets: when scrolled down, a drag scrolls instead of closing", await p.evaluate(() => document.getElementById("songs-sheet").open && !document.getElementById("songs-sheet").style.transform));
+      check("sheets: no JS errors while dragging", errs.length === 0, errs.join(" | "));
       await ctx.close();
     }
 

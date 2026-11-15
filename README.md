@@ -19,12 +19,16 @@ To keep things simple, the site sorts episodes into just two categories:
   - The main screen has your progress, the **up-next card**, search, the **All / Canon / Filler** control and the episode list grouped by arc.
   - Everything else is in the **⋯** menu at the top right: Mark Several Episodes, the Skip-Filler Guide, Watch Together, Get the App, the two settings, Reset Progress, and where the data comes from.
 - **Light and dark mode.** These follow the phone or computer's own setting automatically.
+- **Small phones.** On narrow screens (iPhone SE and mini), the title, headline and segmented controls shrink a little so they stay on one line.
 - **Themes** (**⋯ → Theme**). **Naruto** (orange), **Akatsuki** (red, with faint red clouds), **Sharingan** (deep red, with faint tomoe), **Hidden Sand** (desert gold, with faint dunes) and **Hyūga** (lavender). A theme changes the accent color, the background tint, the logo, the Wrapped card and the share images, in both light and dark mode, and fades in when you switch. Each theme's text colors were checked for at least 4.5:1 contrast. The theme is saved on the device and applied before the page first draws, so there's no flash of orange.
 - **Animations.** They're all CSS or small bits of JavaScript, with no libraries, and they switch off when the device's **Reduce Motion** setting is on.
   - **Up-next card:** a "WATCHED" or "SKIPPED" stamp lands on the card, the card flies off, the cards behind step forward, and a glint sweeps across the new one. With a mouse, the card tilts toward the pointer and catches the light.
   - **Ticking an episode:** the check draws itself and a ring bursts out. The progress bar springs forward with a sheen, and the number bumps.
   - **Stars and hearts:** stars pop in one after another, five stars sets off a small firework, and hearts beat.
   - **Panels:** they slide up when opened and back down when closed. The All / Canon / Filler selector has a sliding thumb.
+  - **Swipe to close:** on phones, drag any panel down to close it, like iOS. It follows your finger, closes when you pull far enough or flick, and springs back otherwise. When a panel is scrolled down, dragging scrolls it instead.
+  - **Haptics:** on Android, marking an episode, a badge and a rank-up give a light buzz. (iPhones don't let web pages use the vibration motor.)
+  - **Press feedback:** chips, round buttons and links shrink a touch when pressed.
   - **Arcs and rows:** arc sections unfold and fold smoothly, and rows and arcs rise in as they appear.
   - **Startup:** a Sharingan intro plays when the app opens (about 2 seconds). The eye opens, the three tomoe spin down to a stop, and you fly through it into the app.
     - Tap it to skip.
@@ -395,6 +399,7 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
   - Wrapped's numbers count up while the real text is already final, and end on the real number
   - switching theme uses the circular reveal where the browser supports it, and the pattern drifts
   - the calendar fills in week by week, and the current songs have equalizer bars
+- **Swipe to close** (a simulated touch screen): the sheet follows a drag, a short slow drag springs back, a long drag or a quick flick closes it, and a drag on a scrolled-down sheet scrolls instead.
 - **Your name:**
   - the first launch asks for it, and **Not Now** isn't asked again
   - **⋯ → Your Name** changes it
@@ -464,7 +469,7 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
 
 - **Sharing switched off:** the card explains that sharing isn't set up (or, on `file://`, that it needs the hosted site).
 
-`node tools/monkey-test.js [seed] [steps]` does hundreds of random actions against a local server (`python3 -m http.server 8000`) and checks after each one that the screen matches the saved data. It also leaves random reactions and notes, opens the calendar, rank and song lists, plans tonight, switches themes, makes share images, and checks that the rank matches the canon count. Thirty runs of 200–250 steps each found no mismatches and no JavaScript errors.
+`node tools/monkey-test.js [seed] [steps]` does hundreds of random actions against a local server (`python3 -m http.server 8000`) and checks after each one that the screen matches the saved data. It also leaves random reactions and notes, opens the calendar, rank and song lists, plans tonight, switches themes, makes share images, and checks that the rank matches the canon count. Thirty-three runs of 200–250 steps each found no mismatches and no JavaScript errors.
 
 **Speed.** Measured with the CPU slowed 4× (roughly a mid-range phone), every tap responds in under about 100 ms. Typing in search went from 360 ms to 80 ms, and opening the Skip-Filler Guide from 232 ms to 64 ms. What makes the difference:
 - Rows animate only when an arc unfolds, not whenever a filter or search shows them again.
@@ -472,6 +477,8 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
 - Off-screen arcs aren't drawn until you scroll to them (`content-visibility`); jumping to an episode draws everything briefly so the scroll lands on the right spot.
 - Search redraws at most once per screen frame.
 - The list is re-filtered only when something it depends on changes.
+- Dates are formatted with reusable formatters instead of a new one per date (that alone halved the Watch Calendar's opening time, from up to 180 ms to about 80 ms).
+- The calendar is built off-page and added in one go, and the song list is built once; after that only its "Now" marker moves.
 
 `node tools/sync-test.js` tests sharing with two simulated devices against the local Firestore emulator. To run it:
 
@@ -512,7 +519,7 @@ It checks:
 - **Leave:** stopping sharing, and staying left after a reload.
 - **Security rules:** listing rooms, malformed codes, unexpected fields, deletes, and other collections are all refused.
 
-The last runs passed all 300 checks in `e2e-test.js` and all 78 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 95** in light mode (performance was 97–99 before the startup animation, which covers the first two seconds), and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
+The last runs passed all 308 checks in `e2e-test.js` and all 78 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 95** in light mode (performance was 97–99 before the startup animation, which covers the first two seconds), and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
 
 ## Legal
 

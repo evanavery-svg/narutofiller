@@ -183,10 +183,17 @@
     var h = Math.floor(minutes / 60), m = minutes % 60;
     return h ? h + "h" + (m ? " " + m + "m" : "") : m + "m";
   }
+  /** Date formatting with reusable formatters (making one per call is slow on phones). */
+  var formatters = {};
+  function fmtDate(d, opts) {
+    var key = JSON.stringify(opts);
+    if (!formatters[key]) {
+      try { formatters[key] = new Intl.DateTimeFormat(undefined, opts); } catch (e) { formatters[key] = { format: function (x) { return x.toDateString(); } }; }
+    }
+    return formatters[key].format(d);
+  }
   function formatDate(d) {
-    var opts = { month: "short", day: "numeric" };
-    if (d.getFullYear() !== new Date().getFullYear()) opts.year = "numeric";
-    return d.toLocaleDateString(undefined, opts);
+    return fmtDate(d, d.getFullYear() !== new Date().getFullYear() ? { month: "short", day: "numeric", year: "numeric" } : { month: "short", day: "numeric" });
   }
   function timeAgo(at) {
     var m = Math.round((Date.now() - at) / 60000);
@@ -472,6 +479,7 @@
       var input = e.target;
       if (!input.matches('input[type="checkbox"]')) return;
       var n = Number(input.dataset.number);
+      if (input.checked) buzz(8);
       withCelebration(function () {
         setState(n, input.checked ? "watched" : "none");
         recordChanges([n]);
@@ -840,6 +848,7 @@
     var lastBefore = profile.last ? { n: profile.last.n, at: profile.last.at } : null;
     var card = $("deck-card");
     deckBusy = true;
+    buzz(state === "watched" ? 12 : 6);
     resetTilt();
     card.classList.add(state === "watched" ? "fly-right" : "fly-left"); // the stamp lands, then it flies
     setTimeout(function () {
@@ -1030,6 +1039,7 @@
     if (hasRank) fillEmblem($("celebrate-rank"), rank);
     $("celebrate-share").hidden = !hasRank;
     openDialog($("celebrate-sheet"), $("celebrate-ok"));
+    buzz(hasRank ? [18, 60, 18, 60, 40] : [14, 50, 28]);
     confetti($("confetti"), hasRank);
   }
   function celebrate(a, rankUp) {
@@ -1146,7 +1156,7 @@
     if (d.arc) line("Favorite arc", d.arc.name);
     if (d.longest >= 2) line("Longest streak", "🔥 " + d.longest + " days in a row");
     if (d.best && d.best.count >= 2) line("Biggest binge", d.best.count + " episodes · " + formatDate(parseDay(d.best.day)));
-    if (d.react) line("Go-to reaction", d.react.e + " × " + d.react.count);
+    if (d.react && d.react.count >= 2) line("Go-to reaction", d.react.e + " × " + d.react.count);
     if (d.favs) line("Favorites", String(d.favs));
     if (d.skipped) line("Episodes skipped", String(d.skipped));
     d.people.forEach(function (p) {
@@ -1216,7 +1226,7 @@
     if (k === dayKey(addDays(today, -1))) return "Yesterday";
     var d = parseDay(k), opts = { weekday: "long", month: "short", day: "numeric" };
     if (d.getFullYear() !== today.getFullYear()) opts.year = "numeric";
-    return d.toLocaleDateString(undefined, opts);
+    return fmtDate(d, opts);
   }
   function plural(n, word) { return n + " " + word + (n === 1 ? "" : "s"); }
 
@@ -1253,6 +1263,7 @@
     grid.style.setProperty("--weeks", CAL_WEEKS);
     months.style.setProperty("--weeks", CAL_WEEKS);
     if (!cal.selected) cal.selected = todayKey;
+    var cells = document.createDocumentFragment(); // built off-page, added in one go
     for (var w = 0; w < CAL_WEEKS; w++) {
       var first = addDays(start, w * 7);
       // a month's name goes above the first week that starts in it (and above the first
@@ -1260,7 +1271,7 @@
       var label = w === 0 ? addDays(first, 14).getMonth() === first.getMonth() : addDays(first, -7).getMonth() !== first.getMonth();
       if (label) {
         var m = document.createElement("span");
-        m.textContent = first.toLocaleDateString(undefined, { month: "short" });
+        m.textContent = fmtDate(first, { month: "short" });
         m.style.gridColumn = (w + 1) + " / span 3";
         months.appendChild(m);
       }
@@ -1283,11 +1294,11 @@
           if (k === cal.selected) { cell.classList.add("selected"); cell.setAttribute("aria-pressed", "true"); }
           else cell.setAttribute("aria-pressed", "false");
         }
-        cell.style.setProperty("--w", w); // for the wave when the sheet opens
-        cell.style.setProperty("--d", i);
-        grid.appendChild(cell);
+        cell.style.cssText = "--w:" + w + ";--d:" + i; // for the wave when the sheet opens
+        cells.appendChild(cell);
       }
     }
+    grid.appendChild(cells);
     renderCalDay(log);
 
     // Everyone's streaks, while sharing
@@ -1446,6 +1457,7 @@
     // a popover sits in the top layer, above any open sheet
     if (el.showPopover) { try { if (!el.matches(":popover-open")) el.showPopover(); } catch (e) { /* not supported */ } }
     replay(el, "show");
+    buzz([10, 40, 16]);
     clearTimeout(badgePopTimer);
     badgePopTimer = setTimeout(hideBadgePop, 4000);
   }
@@ -1611,34 +1623,32 @@
     });
     return out;
   }
+  /** The song list is built once; after that only the "Now" marker moves. */
   function renderSongs() {
     var cur = nextEpisode(), now = cur ? cur.number : 0;
     ["op", "ed"].forEach(function (kind) {
       var box = $(kind + "-list");
-      box.textContent = "";
-      SONG_LIST[kind].forEach(function (s, i) {
+      if (!box.children.length) SONG_LIST[kind].forEach(function (s, i) {
         var row = document.createElement("div");
-        row.className = "row song-row" + (now >= s[0] && now <= s[1] ? " now" : "");
+        row.className = "row song-row";
         row.style.setProperty("--i", i);
         var main = document.createElement("button");
         main.type = "button";
         main.className = "song-main";
         var num = document.createElement("span"); num.className = "song-num"; num.textContent = i + 1;
         var text = document.createElement("span"); text.className = "song-text";
+        var head = document.createElement("span"); head.className = "song-head";
         var title = document.createElement("span"); title.className = "song-title"; title.textContent = s[2];
+        var pill = document.createElement("span"); pill.className = "song-now";
+        var eq = document.createElement("span"); eq.className = "eq"; eq.setAttribute("aria-hidden", "true");
+        eq.appendChild(document.createElement("i")); eq.appendChild(document.createElement("i")); eq.appendChild(document.createElement("i"));
+        pill.appendChild(eq);
+        pill.appendChild(document.createTextNode("Now"));
+        head.appendChild(title); head.appendChild(pill);
         var sub = document.createElement("span"); sub.className = "song-sub";
         sub.textContent = (s[3] ? "“" + s[3] + "” · " : "") + s[4] + " · Ep " + s[0] + "–" + s[1];
-        text.appendChild(title); text.appendChild(sub);
+        text.appendChild(head); text.appendChild(sub);
         main.appendChild(num); main.appendChild(text);
-        if (now >= s[0] && now <= s[1]) {
-          var pill = document.createElement("span"); pill.className = "song-now";
-          var eq = document.createElement("span"); eq.className = "eq"; eq.setAttribute("aria-hidden", "true");
-          eq.appendChild(document.createElement("i")); eq.appendChild(document.createElement("i")); eq.appendChild(document.createElement("i"));
-          pill.appendChild(eq);
-          pill.appendChild(document.createTextNode("Now"));
-          main.appendChild(pill);
-        }
-        main.setAttribute("aria-label", (kind === "op" ? "Opening " : "Ending ") + (i + 1) + ": " + s[2] + " by " + s[4] + ", episodes " + s[0] + " to " + s[1] + ". Jump to episode " + s[0]);
         main.addEventListener("click", function () { closeDialog($("songs-sheet")); jumpTo(EPISODES[s[0] - 1]); });
         var play = document.createElement("a");
         play.className = "song-play";
@@ -1651,8 +1661,15 @@
         row.appendChild(play);
         box.appendChild(row);
       });
+      SONG_LIST[kind].forEach(function (s, i) {
+        var playing = now >= s[0] && now <= s[1], row = box.children[i];
+        row.classList.toggle("now", playing);
+        row.querySelector(".song-main").setAttribute("aria-label", (kind === "op" ? "Opening " : "Ending ") + (i + 1) + ": " + s[2] + " by " + s[4] +
+          ", episodes " + s[0] + " to " + s[1] + (playing ? ", playing where you are" : "") + ". Jump to episode " + s[0]);
+      });
     });
   }
+
 
   // ---------- Plan tonight ----------
   var PLAN_TIMES = [[30, "30 min"], [45, "45 min"], [60, "1 hr"], [90, "1½ hr"], [120, "2 hr"], [180, "3 hr"]];
@@ -1673,7 +1690,7 @@
     countUp($("plan-count"), eps.length, { ms: 350 });
     $("plan-count-label").textContent = eps.length === 1 ? "episode" : "episodes";
     var end = new Date(Date.now() + eps.length * MINUTES_PER_EPISODE * 60000);
-    $("plan-end").textContent = eps.length ? "Done around " + end.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }) : "";
+    $("plan-end").textContent = eps.length ? "Done around " + fmtDate(end, { hour: "numeric", minute: "2-digit" }) : "";
     var people = deckMode() === "us" ? partners() : [];
     var lines = [];
     if (people.length) lines.push("For you and " + nameList(people) + ": episodes none of you has watched.");
@@ -1945,7 +1962,7 @@
     textBlock(ctx, whose() + " Naruto", CARD_W / 2, 380, 940, 112, 2);
     ctx.font = font(500, 40);
     ctx.globalAlpha = 0.85;
-    ctx.fillText("So far · " + new Date().toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }), CARD_W / 2, 460);
+    ctx.fillText("So far · " + fmtDate(new Date(), { month: "long", day: "numeric", year: "numeric" }), CARD_W / 2, 460);
     ctx.globalAlpha = 1;
     [[d.count, d.count === 1 ? "episode" : "episodes"], [d.hours, d.hours === 1 ? "hour" : "hours"], [d.days, d.days === 1 ? "day" : "days"]].forEach(function (s, i) {
       var x = 90 + i * 310;
@@ -1968,7 +1985,7 @@
     if (d.top.length) lines.push(["Top episode", "★" + ratings[d.top[0]] + "  Ep " + d.top[0] + " · " + EPISODES[d.top[0] - 1].title]);
     if (d.arc) lines.push(["Favorite arc", d.arc.name]);
     if (d.longest >= 2) lines.push(["Longest streak", "🔥 " + d.longest + " days in a row"]);
-    else if (d.react) lines.push(["Go-to reaction", d.react.e + " × " + d.react.count]);
+    else if (d.react && d.react.count >= 2) lines.push(["Go-to reaction", d.react.e + " × " + d.react.count]);
     if (!lines.length) lines.push(["Just getting started", "Believe it!"]);
     var y = 1230;
     lines.slice(0, 3).forEach(function (l) {
@@ -2623,12 +2640,57 @@
   }
 
   // ---------- Menu and sheets ----------
+  /** A light tap of the phone's vibration motor (Android; iPhones don't allow it from a web page). */
+  function buzz(pattern) {
+    if (!navigator.vibrate) return;
+    try { navigator.vibrate(pattern); } catch (e) { /* not allowed right now */ }
+  }
+  /** Phones: drag a bottom sheet down to close it, like iOS. It follows your finger, closes if
+   *  you pull far or flick, and springs back otherwise. Only from the top of the sheet's scroll. */
+  function initSheetDrag(dlg) {
+    var t = null; // the drag in progress
+    dlg.addEventListener("touchstart", function (e) {
+      t = null;
+      if (window.innerWidth > 520 || e.touches.length !== 1 || dlg.scrollTop > 0) return;
+      if (e.target.closest("input, textarea, select, .reactions, .stars")) return;
+      t = { x: e.touches[0].clientX, y: e.touches[0].clientY, lastY: e.touches[0].clientY, lastT: e.timeStamp, v: 0, dy: 0, on: false };
+    }, { passive: true });
+    dlg.addEventListener("touchmove", function (e) {
+      if (!t) return;
+      var x = e.touches[0].clientX, y = e.touches[0].clientY, d = y - t.y;
+      if (!t.on) {
+        if (Math.abs(x - t.x) > Math.abs(d) || d < 0 || dlg.scrollTop > 0) { t = d < 8 && Math.abs(x - t.x) < 8 ? t : null; return; }
+        if (d < 8) return;
+        t.on = true;
+        dlg.classList.add("dragging");
+      }
+      e.preventDefault(); // the sheet moves instead of the page
+      t.dy = d - 8;
+      var dt = Math.max(1, e.timeStamp - t.lastT);
+      t.v = 0.7 * ((y - t.lastY) / dt) + 0.3 * t.v;
+      t.lastY = y;
+      t.lastT = e.timeStamp;
+      dlg.style.transform = "translateY(" + t.dy + "px)";
+    }, { passive: false });
+    function end() {
+      var drag = t;
+      t = null;
+      if (!drag || !drag.on) return;
+      dlg.classList.remove("dragging");
+      var shut = drag.dy > Math.min(160, dlg.offsetHeight * 0.32) || (drag.v > 0.5 && drag.dy > 30);
+      if (shut) closeDialog(dlg); // slides the rest of the way down from where your finger left it
+      dlg.style.transform = "";
+    }
+    dlg.addEventListener("touchend", end);
+    dlg.addEventListener("touchcancel", end);
+  }
   function initSheets() {
     document.querySelectorAll("dialog.sheet").forEach(function (dlg) {
       dlg.addEventListener("click", function (e) { if (e.target === dlg) closeDialog(dlg); }); // backdrop
       dlg.querySelectorAll("[data-close]").forEach(function (b) {
         b.addEventListener("click", function () { closeDialog(dlg); });
       });
+      initSheetDrag(dlg);
     });
     $("menu-open").addEventListener("click", function () {
       showResetConfirm(false, true);

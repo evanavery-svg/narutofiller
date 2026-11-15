@@ -322,7 +322,7 @@ label.row { cursor: pointer; }
 /* ---------- Progress ---------- */
 .progress { margin: 4px 2px 14px; }
 .progress-head { display: flex; align-items: baseline; gap: 8px; }
-.progress-title { margin: 0; font-family: var(--font-display); font-size: 20px; font-weight: 700; letter-spacing: 0.01em; }
+.progress-title { margin: 0; font-family: var(--font-display); font-size: 20px; font-weight: 700; letter-spacing: 0.01em; font-variant-numeric: tabular-nums; }
 .progress-head .sync-chip, .progress-head .streak-chip { margin-left: auto; }
 .progress-head .streak-chip:not([hidden]) + .sync-chip { margin-left: 0; }
 .sync-chip {
@@ -673,7 +673,7 @@ label.row { cursor: pointer; }
 .wrapped-who { margin: 0 0 14px; font-family: var(--font-display); font-size: 24px; font-weight: 800; color: var(--on-accent); }
 .wrapped-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
 .wrapped-stats > div { background: var(--card-glass); border-radius: 14px; padding: 10px; display: flex; flex-direction: column; }
-.wrapped-big { font-family: var(--font-display); font-size: 30px; font-weight: 800; line-height: 1.1; color: var(--on-accent); }
+.wrapped-big { font-family: var(--font-display); font-size: 30px; font-weight: 800; line-height: 1.1; color: var(--on-accent); font-variant-numeric: tabular-nums; }
 .wrapped-small { font-size: 13px; font-weight: 600; color: var(--on-accent); }
 .wrapped-details { display: grid; gap: 6px; }
 .wrapped-line { margin: 0; display: grid; gap: 1px; padding: 8px 10px; border-radius: 12px; background: var(--card-glass); }
@@ -872,6 +872,13 @@ label.row { cursor: pointer; }
   .ep-main { flex-direction: column; align-items: flex-start; gap: 3px; }
   .title { font-size: 22px; }
 }
+/* Small phones (iPhone SE, mini): keep the title and headline on one line */
+@media (max-width: 370px) {
+  .title { font-size: 19px; }
+  .progress-title { font-size: 17px; }
+  .segmented button { font-size: 13px; padding-left: 6px; padding-right: 6px; }
+  .stat-label { font-size: 12px; }
+}
 
 @media (min-width: 700px) {
   .ep-map { grid-template-columns: repeat(44, minmax(0, 1fr)); }
@@ -1012,7 +1019,10 @@ label.row { cursor: pointer; }
 .song-num { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 50%; background: var(--fill); font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .song-row.now .song-num { background: var(--accent); color: var(--on-accent); }
 .song-text { flex: 1 1 auto; min-width: 0; display: grid; }
-.song-title { font-size: 17px; }
+.song-head { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.song-title { font-size: 17px; min-width: 0; }
+.song-head .song-now { margin-top: 2px; }
+.song-row:not(.now) .song-now { display: none; }
 .song-sub { font-size: 13px; color: var(--secondary); }
 .song-now { flex: none; display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px; border-radius: 99px; background: var(--tint); color: var(--accent-text); font-size: 12px; font-weight: 700; }
 /* equaliser bars on the song that's playing where you are */
@@ -1080,7 +1090,7 @@ label.row { cursor: pointer; }
 .share-preview { perspective: 900px; }
 .sheet[open] .share-preview img { animation: card-flip 0.75s 0.08s cubic-bezier(.2, .9, .3, 1.15) backwards; }
 @keyframes card-flip { from { opacity: 0; transform: rotateY(-75deg) rotateZ(-8deg) scale(0.7); } }
-.rank-share { margin-top: 8px; }
+.rank-share { margin-top: 14px; }
 button.award { font: inherit; color: inherit; border: 0; cursor: pointer; }
 button.award:active { transform: scale(0.97); }
 .celebrate-inner .button-plain { width: 100%; margin-top: -6px; }
@@ -1089,6 +1099,17 @@ button.award:active { transform: scale(0.97); }
 .theme-fade, .theme-fade *, .theme-fade *::before, .theme-fade *::after {
   transition: background-color 0.45s ease, color 0.45s ease, border-color 0.45s ease, box-shadow 0.45s ease, fill 0.45s ease, stroke 0.45s ease !important;
 }
+
+/* Dragging a sheet down: it follows the finger with no lag */
+.sheet.dragging { transition: none !important; }
+
+/* ---------- Press feedback: everything tappable gives a little ---------- */
+.icon-button, .streak-chip, .rank-chip, .sync-chip, .plan-open, .partner-line, .race,
+.song-play, .ep-info, .sheet-close, .fav-button, .link-button { transition: transform 0.12s ease, opacity 0.12s ease; }
+.icon-button:active, .streak-chip:active, .rank-chip:active, .sync-chip:active, .plan-open:active, .theme-option:active,
+.plan-time:active, .song-play:active, .ep-info:active, .sheet-close:active, .fav-button:active { transform: scale(0.94); }
+.partner-line:active, .race:active { transform: scale(0.98); opacity: 0.8; }
+.link-button:active { opacity: 0.6; }
 
 /* ---------- More motion ---------- */
 /* The theme's pattern drifts slowly behind everything (one tile per loop, so it never jumps) */
