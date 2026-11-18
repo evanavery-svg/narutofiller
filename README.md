@@ -483,7 +483,7 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
 
 - **Sharing switched off:** the card explains that sharing isn't set up (or, on `file://`, that it needs the hosted site).
 
-`node tools/monkey-test.js [seed] [steps]` does hundreds of random actions against a local server (`python3 -m http.server 8000`) and checks after each one that the screen matches the saved data. It also leaves random reactions and notes, opens the calendar, rank and song lists, plans tonight, switches themes, makes share images, and checks that the rank matches the canon count. Thirty-three runs of 200–250 steps each found no mismatches and no JavaScript errors.
+`node tools/monkey-test.js [seed] [steps]` does hundreds of random actions against a local server (`python3 -m http.server 8000`) and checks after each one that the screen matches the saved data. It also leaves random reactions and notes, opens the calendar, rank and song lists, plans tonight, switches themes, makes share images, and checks that the rank matches the canon count. Thirty-six runs of 200–250 steps each found no mismatches and no JavaScript errors.
 
 **Speed.** Measured with the CPU slowed 4× (roughly a mid-range phone), every tap responds in under about 100 ms. Typing in search went from 360 ms to 80 ms, and opening the Skip-Filler Guide from 232 ms to 64 ms. What makes the difference:
 - Rows animate only when an arc unfolds, not whenever a filter or search shows them again.
