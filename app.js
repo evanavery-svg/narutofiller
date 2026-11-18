@@ -595,6 +595,200 @@
   }
   function pop(el) { replay(el, "pop"); }
 
+  // ---------- Jutsu effects (smoke, the substitution log, the kunai) ----------
+  /** Where effects are drawn: inside an open sheet (so they show above it), or a fixed layer on the page. */
+  function fxHost(el) {
+    var dlg = el && el.closest && el.closest("dialog[open]");
+    if (dlg) return dlg;
+    var layer = $("fx-layer");
+    if (!layer) {
+      layer = document.createElement("div");
+      layer.id = "fx-layer";
+      layer.setAttribute("aria-hidden", "true");
+      document.body.appendChild(layer);
+    }
+    return layer;
+  }
+  /** Puts el at a screen point (its center) inside host. */
+  function placeAt(host, el, x, y, w, h) {
+    var dx = 0, dy = 0;
+    if (host.id !== "fx-layer") { var hr = host.getBoundingClientRect(); dx = host.scrollLeft - hr.left; dy = host.scrollTop - hr.top; }
+    el.style.left = (x + dx - w / 2) + "px";
+    el.style.top = (y + dy - h / 2) + "px";
+    el.style.width = w + "px";
+    el.style.height = h + "px";
+    host.appendChild(el);
+  }
+  function fxDone(anim, el) { anim.onfinish = anim.oncancel = function () { el.remove(); }; }
+  /** A puff of smoke at a screen point. opts: { count, size, spread, dark, delay } */
+  function smokePuff(near, x, y, opts) {
+    opts = opts || {};
+    if (reduceMotion() || !document.body.animate) return;
+    var host = fxHost(near), count = opts.count || 9, size = opts.size || 46, spread = opts.spread || 60;
+    for (var i = 0; i < count; i++) {
+      var el = document.createElement("span");
+      el.className = "puff" + (opts.dark ? " dark" : "");
+      var s = size * (0.6 + Math.random() * 0.7), a = (i / count) * Math.PI * 2 + Math.random() * 0.6;
+      var d = spread * (0.45 + Math.random() * 0.55);
+      placeAt(host, el, x + (Math.random() - 0.5) * size * 0.4, y + (Math.random() - 0.5) * size * 0.4, s, s);
+      fxDone(el.animate([
+        { transform: "translate(0, 0) scale(0.25)", opacity: 0 },
+        { opacity: 0.95, offset: 0.2 },
+        { transform: "translate(" + (Math.cos(a) * d).toFixed(1) + "px, " + (Math.sin(a) * d - 14).toFixed(1) + "px) scale(" + (1.3 + Math.random() * 0.6).toFixed(2) + ")", opacity: 0 }
+      ], { duration: 650 + Math.random() * 350, delay: (opts.delay || 0) + Math.random() * 60, easing: "cubic-bezier(.15, .7, .3, 1)", fill: "both" }), el);
+    }
+  }
+  var LOG_SVG = '<svg viewBox="0 0 120 64" aria-hidden="true">' +
+    '<defs><linearGradient id="log-bark" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a86f3d"/><stop offset="0.55" stop-color="#7a4a22"/><stop offset="1" stop-color="#5a3415"/></linearGradient></defs>' +
+    '<path d="M18 10h80v44H18z" fill="url(#log-bark)"/>' +
+    '<path d="M30 18c14 2 30-2 52 1M28 32c20 3 38-3 60 1M34 45c16 1 28-2 46 0" fill="none" stroke="#4a2a10" stroke-width="2" stroke-linecap="round" opacity="0.55"/>' +
+    '<path d="M58 10l6-8h7l-4 8" fill="#7a4a22"/>' +
+    '<ellipse cx="18" cy="32" rx="12" ry="22" fill="#5a3415"/>' +
+    '<ellipse cx="100" cy="32" rx="12" ry="22" fill="#e2b77c"/>' +
+    '<ellipse cx="100" cy="32" rx="8" ry="15" fill="none" stroke="#b9854a" stroke-width="2"/>' +
+    '<ellipse cx="100" cy="32" rx="4" ry="7.5" fill="none" stroke="#b9854a" stroke-width="2"/></svg>';
+  /** Skip = the Substitution Jutsu: the card vanishes in smoke and a log is left in its place. */
+  function substitution(card) {
+    if (reduceMotion() || !document.body.animate) return;
+    var r = card.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+    smokePuff(card, x, y, { count: 14, size: 70, spread: Math.min(150, r.width / 2) });
+    var host = fxHost(card), log = document.createElement("span");
+    log.className = "sub-log";
+    log.innerHTML = LOG_SVG;
+    placeAt(host, log, x, y, 132, 70);
+    fxDone(log.animate([
+      { transform: "translateY(-30px) rotate(-14deg) scale(0.5)", opacity: 0 },
+      { transform: "translateY(0) rotate(4deg) scale(1.05)", opacity: 1, offset: 0.28 },
+      { transform: "translateY(-6px) rotate(-2deg) scale(1)", opacity: 1, offset: 0.4 },
+      { transform: "translateY(0) rotate(0deg) scale(1)", opacity: 1, offset: 0.7 },
+      { transform: "translateY(4px) rotate(0deg) scale(0.92)", opacity: 0 }
+    ], { duration: 950, delay: 40, easing: "ease-out", fill: "both" }), log);
+    smokePuff(card, x, y, { count: 7, size: 54, spread: 70, delay: 640 }); // and it poofs away too
+  }
+  /** Spoiler shield: "Release!" Smoke and the 解 seal, while the blur melts away. */
+  function releaseJutsu(scope, at) {
+    if (reduceMotion() || !document.body.animate) return;
+    scope.classList.add("releasing");
+    clearTimeout(scope._releaseTimer);
+    scope._releaseTimer = setTimeout(function () { scope.classList.remove("releasing"); }, 800);
+    var r = at.getBoundingClientRect(), x = r.left + Math.min(r.width, 280) / 2, y = r.top + r.height / 2;
+    var inSheet = !!at.closest("dialog");
+    smokePuff(at, x, y, { count: 10, size: 44, spread: 80, dark: inSheet });
+    var host = fxHost(at), seal = document.createElement("span");
+    seal.className = "kai-seal";
+    seal.textContent = "解";
+    placeAt(host, seal, x, y, 60, 60);
+    fxDone(seal.animate([
+      { transform: "scale(0.4) rotate(-20deg)", opacity: 0 },
+      { transform: "scale(1.15) rotate(4deg)", opacity: 1, offset: 0.3 },
+      { transform: "scale(1) rotate(0deg)", opacity: 1, offset: 0.55 },
+      { transform: "scale(1.5) rotate(0deg)", opacity: 0 }
+    ], { duration: 750, easing: "ease-out", fill: "both" }), seal);
+  }
+  var KUNAI_SVG = '<svg viewBox="0 0 80 22" aria-hidden="true">' +
+    '<path d="M2 11 20 3.5 40 9v4L20 18.5z" fill="#c9cfd8"/><path d="M2 11 20 3.5 40 9H20z" fill="#eef1f5"/>' +
+    '<path d="M40 8.5h26v5H40z" fill="#34343e" stroke="#a7adb7" stroke-width="0.9"/><path d="M43 8.5l3 5M49 8.5l3 5M55 8.5l3 5M61 8.5l3 5" stroke="#8a6a4a" stroke-width="1.6"/>' +
+    '<circle cx="72" cy="11" r="5.2" fill="none" stroke="#c9cfd8" stroke-width="2.6"/></svg>';
+  /** A kunai flies in from the right edge and sticks into the row. */
+  function throwKunai(li) {
+    if (reduceMotion() || !document.body.animate) return;
+    var r = li.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > window.innerHeight) return;
+    var host = fxHost(null), k = document.createElement("span");
+    k.className = "kunai";
+    k.innerHTML = KUNAI_SVG;
+    var tipX = r.right - 122, y = r.top + r.height / 2, from = window.innerWidth + 80 - tipX;
+    placeAt(host, k, tipX + 54, y, 108, 30); // the tip sits at the left edge of the kunai
+    var flight = k.animate([
+      { transform: "translateX(" + from + "px) rotate(-8deg)", opacity: 1 },
+      { transform: "translateX(0) rotate(0deg)", opacity: 1 }
+    ], { duration: 230, easing: "cubic-bezier(.5, 0, 1, .6)", fill: "both" });
+    flight.onfinish = function () {
+      buzz(10);
+      li.animate([{ transform: "translateX(0)" }, { transform: "translateX(-5px)" }, { transform: "translateX(3px)" }, { transform: "translateX(0)" }], { duration: 260, easing: "ease-out" });
+      fxDone(k.animate([
+        { transform: "translateX(0) rotate(0deg)", opacity: 1 },
+        { transform: "translateX(-2px) rotate(3deg)", opacity: 1, offset: 0.08 },
+        { transform: "translateX(0) rotate(-2deg)", opacity: 1, offset: 0.16 },
+        { transform: "translateX(0) rotate(0deg)", opacity: 1, offset: 0.75 },
+        { transform: "translateX(0) rotate(0deg)", opacity: 0 }
+      ], { duration: 1100, easing: "ease-out", fill: "both" }), k);
+      for (var i = 0; i < 5; i++) { // sparks where it hits
+        var sp = document.createElement("span");
+        sp.className = "spark";
+        placeAt(host, sp, tipX, y, 4, 4);
+        var a = Math.PI * (0.5 + Math.random()), d = 14 + Math.random() * 16;
+        fxDone(sp.animate([{ transform: "translate(0, 0) scale(1)", opacity: 1 },
+          { transform: "translate(" + (Math.cos(a) * d).toFixed(1) + "px, " + (Math.sin(a) * d).toFixed(1) + "px) scale(0.3)", opacity: 0 }],
+          { duration: 320 + Math.random() * 160, easing: "ease-out", fill: "both" }), sp);
+      }
+    };
+    flight.oncancel = function () { k.remove(); };
+  }
+  /** Calls fn once the page has stopped scrolling (or after maxMs). */
+  function afterScroll(fn, maxMs) {
+    var last = window.scrollY, still = 0, start = Date.now();
+    (function tick() {
+      if (window.scrollY === last) still++; else { still = 0; last = window.scrollY; }
+      if (still >= 4 || Date.now() - start > (maxMs || 1200)) fn(); else requestAnimationFrame(tick);
+    })();
+  }
+  /** Mark Several: the boxes tick in a wave, each with a puff of shadow-clone smoke. */
+  function cloneWave(nums) {
+    if (reduceMotion()) return;
+    var vh = window.innerHeight, shown = [];
+    nums.forEach(function (n) {
+      var li = rows[n - 1] && rows[n - 1].li;
+      if (!li || !li.isConnected || !li.offsetParent) return;
+      var r = li.getBoundingClientRect();
+      if (r.bottom > 0 && r.top < vh) shown.push(li);
+    });
+    shown.slice(0, 24).forEach(function (li, i) {
+      var box = li.querySelector(".box");
+      if (!box) return;
+      var delay = 220 + i * 45;
+      li.style.setProperty("--wave", delay + "ms");
+      li.classList.remove("clone-wave"); void li.offsetWidth; li.classList.add("clone-wave");
+      setTimeout(function () { li.classList.remove("clone-wave"); li.style.removeProperty("--wave"); }, delay + 700);
+      setTimeout(function () {
+        var b = box.getBoundingClientRect();
+        smokePuff(box, b.left + b.width / 2, b.top + b.height / 2, { count: 5, size: 22, spread: 22, dark: true });
+      }, delay);
+    });
+  }
+  /** Mark Several from the top of the page: shadow clones pop along the part of the bar that just filled. */
+  function clonesOnBar(before) {
+    var bar = $("progress-canon-bar"), track = bar.parentNode;
+    var max = Number(bar.getAttribute("aria-valuemax")) || 1, after = Number(bar.getAttribute("aria-valuenow")) || 0;
+    if (reduceMotion() || after <= before) return;
+    var r = track.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > window.innerHeight) return;
+    var from = before / max, to = after / max, count = Math.max(2, Math.min(10, Math.round((to - from) * 24)));
+    for (var i = 0; i < count; i++) (function (i) {
+      var f = from + (to - from) * (count === 1 ? 1 : i / (count - 1));
+      setTimeout(function () {
+        var t = track.getBoundingClientRect();
+        smokePuff(track, t.left + t.width * f, t.top + t.height / 2, { count: 6, size: 32, spread: 30, dark: true });
+      }, 260 + i * 70);
+    })(i);
+  }
+  /** The up-next description fades in a word at a time. Its text stays the same. */
+  function wordsIn(el) {
+    if (reduceMotion()) return;
+    var text = el.textContent;
+    el.textContent = "";
+    var i = 0;
+    text.split(/(\s+)/).forEach(function (w) {
+      if (!w) return;
+      if (/^\s+$/.test(w)) { el.appendChild(document.createTextNode(w)); return; }
+      var span = document.createElement("span");
+      span.className = "word";
+      span.style.setProperty("--i", i++);
+      span.textContent = w;
+      el.appendChild(span);
+    });
+  }
+
   // ---------- Episode maps (one square per episode) ----------
   var mapCells = { guide: [] };
   function buildMap(container, cells) {
@@ -852,7 +1046,8 @@
     deckBusy = true;
     buzz(state === "watched" ? 12 : 6);
     resetTilt();
-    card.classList.add(state === "watched" ? "fly-right" : "fly-left"); // the stamp lands, then it flies
+    card.classList.add(state === "watched" ? "fly-right" : "fly-left"); // the stamp lands, then it flies (or, skipped, vanishes in smoke)
+    if (state === "skipped") setTimeout(function () { substitution(card); }, 150);
     setTimeout(function () {
       withCelebration(function () {
         setState(n, state);
@@ -870,6 +1065,7 @@
       if (!reduceMotion()) {
         replay(card, "enter");
         replay($("deck"), "advance");
+        if (!card.classList.contains("is-hidden-title")) wordsIn($("deck-desc"));
         setTimeout(function () { card.classList.remove("enter"); $("deck").classList.remove("advance"); }, 850);
       }
       toast((state === "watched" ? "Watched" : "Skipped") + " episode " + n, "Undo", function () {
@@ -957,13 +1153,18 @@
     $("deck-find").addEventListener("click", function () {
       var ep = nextEpisode();
       if (!ep) return;
-      if (prefs.shield && !deck.revealed[ep.number]) { deck.revealed[ep.number] = true; renderDeck(); return; } // first tap reveals
-      jumpTo(ep);
+      if (prefs.shield && !deck.revealed[ep.number]) { // first tap reveals
+        deck.revealed[ep.number] = true;
+        releaseJutsu($("deck-card"), $("deck-title"));
+        renderDeck();
+        return;
+      }
+      jumpTo(ep, { kunai: true });
     });
   }
 
   /** Scrolls the list to an episode, adjusting filters/search if they hide it. */
-  function jumpTo(ep) {
+  function jumpTo(ep, opts) {
     var i = ep.number - 1;
     closeAllSheets();
     if (!isArcOpen(arcOf[i])) setArcOpen(arcOf[i], true, true);
@@ -993,6 +1194,7 @@
     void li.offsetWidth; // restart animation
     li.classList.add("is-highlight");
     rows[i].input.focus({ preventScroll: true });
+    if (opts && opts.kunai && !reduce) afterScroll(function () { throwKunai(li); });
   }
 
   // ---------- Reset (two-step confirm) ----------
@@ -2397,7 +2599,12 @@
   function initEpSheet() {
     buildStars($("ep-sheet-stars"), "Your rating", function (v) { pickRating(epSheet.n, v); });
     $("ep-sheet-fav").addEventListener("click", function () { toggleFavorite(epSheet.n); });
-    $("ep-sheet-reveal").addEventListener("click", function () { epSheet.revealed = true; renderEpSheet(); });
+    $("ep-sheet-reveal").addEventListener("click", function () {
+      epSheet.revealed = true;
+      releaseJutsu($("ep-sheet"), $("ep-sheet-name"));
+      renderEpSheet();
+      $("ep-sheet-title").focus({ preventScroll: true }); // the button is gone; keep focus in the sheet
+    });
     REACTIONS.forEach(function (r) {
       var b = document.createElement("button");
       b.type = "button";
@@ -2584,7 +2791,9 @@
     }
     var before = {};
     changed.forEach(function (n) { before[n] = stateOf(n); });
+    var barBefore = Number($("progress-canon-bar").getAttribute("aria-valuenow")) || 0;
     applyStates(changed, function () { return target; });
+    if (markWatched) { cloneWave(changed); clonesOnBar(barBefore); }
     toast((markWatched ? "Marked " : "Unmarked ") + changed.length + " episode" + (changed.length === 1 ? "" : "s"),
       "Undo", function () { applyStates(changed, function (n) { return before[n]; }); });
   }

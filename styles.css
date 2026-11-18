@@ -429,7 +429,7 @@ label.row { cursor: pointer; }
   display: flex; flex-direction: column; gap: 16px;
   min-height: 250px; padding: 18px; border-radius: 22px;
   color: #fff; box-shadow: 0 14px 30px -12px rgba(0, 0, 0, 0.45); overflow: hidden;
-  transition: transform 0.3s cubic-bezier(.4, 0, .6, 1), opacity 0.3s;
+  transition: transform 0.3s cubic-bezier(.4, 0, .6, 1), opacity 0.3s, filter 0.3s;
 }
 /* with a mouse, the card tilts toward the pointer and catches the light */
 .deck-card { will-change: transform; }
@@ -456,7 +456,7 @@ label.row { cursor: pointer; }
 .deck-card[data-kind="canon"] { background: linear-gradient(155deg, #1b7f3f, #0f5a2a); }
 .deck-card[data-kind="filler"] { background: linear-gradient(155deg, #d42a24, #8a0e10); }
 .deck-card.fly-right { transform: translateX(125%) rotate(14deg); opacity: 0; transition-delay: 0.16s; }
-.deck-card.fly-left { transform: translateX(-125%) rotate(-14deg); opacity: 0; transition-delay: 0.16s; }
+.deck-card.fly-left { transform: scale(0.8); filter: blur(14px); opacity: 0; transition-delay: 0.16s; } /* skipped: it vanishes in smoke, and the substitution log takes its place */
 .deck-card.enter { animation: deck-enter 0.4s cubic-bezier(.2, 1.2, .3, 1); }
 @keyframes deck-enter { from { transform: translateY(10px) scale(0.95); opacity: 0.55; } }
 .deck-card.enter::before { /* a glint sweeps across the new card */
@@ -1171,6 +1171,29 @@ html.theme-reveal::view-transition-new(root) { animation: theme-reveal 0.65s cub
 
 /* The race: bars grow in, songs deal in */
 .sheet[open] .song-row { animation: row-in 0.35s cubic-bezier(.2, .8, .2, 1) backwards; animation-delay: calc(var(--i, 0) * 28ms + 60ms); }
+
+/* ---------- Jutsu effects ---------- */
+#fx-layer { position: fixed; inset: 0; z-index: 60; pointer-events: none; overflow: hidden; }
+.puff, .sub-log, .kai-seal, .kunai, .spark { position: absolute; z-index: 6; pointer-events: none; will-change: transform, opacity; }
+.puff { border-radius: 50%; background: radial-gradient(circle at 40% 38%, rgba(255, 255, 255, 0.95), rgba(236, 236, 240, 0.8) 45%, rgba(220, 220, 228, 0) 72%); }
+.puff.dark { background: radial-gradient(circle at 40% 38%, rgba(170, 170, 180, 0.75), rgba(150, 150, 160, 0.5) 45%, rgba(140, 140, 150, 0) 72%); }
+.sub-log svg, .kunai svg { display: block; width: 100%; height: 100%; filter: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.35)); }
+.kai-seal {
+  display: grid; place-items: center; border-radius: 50%;
+  font-family: "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif CJK JP", serif; font-size: 36px; font-weight: 700; line-height: 1;
+  color: #fff; background: radial-gradient(circle, rgba(var(--accent-rgb), 0.95) 0 55%, rgba(var(--accent-rgb), 0) 72%);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.spark { border-radius: 50%; background: #ffe7a3; box-shadow: 0 0 6px 2px rgba(255, 210, 120, 0.8); }
+/* Spoiler shield: the blur melts away on Release */
+.releasing .deck-title, .releasing .deck-desc, .releasing .deck-arc,
+.releasing .ep-sheet-name, .releasing .ep-sheet-desc, .releasing #ep-sheet-arc { transition: filter 0.6s ease-out 0.12s; }
+/* Up-next description: word by word */
+.deck-desc .word { display: inline-block; animation: word-in 0.4s cubic-bezier(.2, .8, .3, 1) backwards; animation-delay: calc(var(--i, 0) * 16ms + 140ms); }
+@keyframes word-in { from { opacity: 0; filter: blur(5px); transform: translateY(5px); } }
+/* Mark Several: a wave of shadow clones ticks the boxes */
+.episode.clone-wave .ep-check .box { animation: pop 0.35s var(--wave, 0ms) cubic-bezier(.3, 1.6, .5, 1) backwards; }
+.episode.clone-wave .ep-check input:checked + .box svg path { stroke-dasharray: 24; animation: draw-check 0.3s calc(var(--wave, 0ms) + 80ms) ease-out backwards; }
 
 @media (prefers-reduced-motion: reduce) {
   .splash { display: none; }

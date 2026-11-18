@@ -333,6 +333,7 @@ const collapse = (nums) => {
     check("bulk: sheet closed", !(await page.evaluate(() => document.getElementById("bulk-sheet").open)));
     check("bulk: progress updated", (await page.textContent("#progress-all-text")) === "29 of 220 total");
     check("bulk: offers Undo", (await page.textContent("#toast")).includes("Marked 29 episodes") && await page.isVisible(".toast-action"));
+    check("animations: Mark Several sends shadow clones along the progress bar", await waitFor(async () => (await page.locator("#fx-layer .puff").count()) > 0, 1500));
     await page.click(".toast-action");
     check("bulk: Undo restores", (await page.locator(".episode input:checked").count()) === 0);
     await bulkOpen();
@@ -439,13 +440,39 @@ const collapse = (nums) => {
     check("animations: Watched stamps the card before it flies", (await page.locator("#deck-card.fly-right .stamp-watched").count()) === 1 && (await page.textContent("#deck-num")) === beforeFly);
     await waitFor(async () => (await page.textContent("#deck-num")) !== beforeFly, 3000);
     check("animations: the next card comes up", (await page.textContent("#deck-num")) !== beforeFly && (await page.locator("#deck-card.fly-right").count()) === 0);
+    const nextNum = Number((await page.textContent("#deck-num")).replace(/\D/g, ""));
+    check("animations: the new description fades in word by word, with the same text", (await page.locator("#deck-desc .word").count()) > 5 && (await page.textContent("#deck-desc")) === E[nextNum - 1].desc);
     await page.click(".toast-action"); // undo
     await page.click('#rate-close').catch(() => {});
+    // Skip = the Substitution Jutsu
+    const beforeSkip = await page.textContent("#deck-num");
+    await page.click("#deck-skip");
+    check("animations: Skip turns the card into a log in a puff of smoke", await waitFor(async () => (await page.locator("#fx-layer .sub-log").count()) === 1 && (await page.locator("#fx-layer .puff").count()) > 5, 800));
+    check("animations: the skipped card vanishes in smoke (blurred out)", (await page.$eval("#deck-card", (el) => el.classList.contains("fly-left") && getComputedStyle(el).filter.includes("blur"))));
+    await waitFor(async () => (await page.textContent("#deck-num")) !== beforeSkip, 3000);
+    check("animations: the log and smoke clean themselves up", await waitFor(async () => (await page.locator("#fx-layer > *").count()) === 0, 3000));
+    await page.click(".toast-action"); // undo the skip
+    // Tapping the card throws a kunai at the episode in the list
+    const kunaiTarget = Number((await page.textContent("#deck-num")).replace(/\D/g, ""));
+    await page.click("#deck-find");
+    check("animations: a kunai flies to the episode in the list", await waitFor(async () => (await page.locator("#fx-layer .kunai").count()) === 1, 2500));
+    const kunaiHit = await page.evaluate((n) => {
+      const k = document.querySelector("#fx-layer .kunai").getBoundingClientRect(), r = document.getElementById("ep-" + n).getBoundingClientRect();
+      return { k: k.top + k.height / 2, top: r.top, bottom: r.bottom };
+    }, kunaiTarget);
+    check("animations: it lands on that episode's row", kunaiHit.k > kunaiHit.top && kunaiHit.k < kunaiHit.bottom, JSON.stringify(kunaiHit));
+    check("animations: the kunai is gone afterwards", await waitFor(async () => (await page.locator("#fx-layer > *").count()) === 0, 3000));
+    await page.evaluate(() => window.scrollTo(0, 0));
     await page.emulateMedia({ reducedMotion: "reduce" });
     const beforeReduced = await page.textContent("#deck-num");
     await page.click("#deck-watch");
     check("animations: with Reduce Motion the card changes at once", (await waitFor(async () => (await page.textContent("#deck-num")) !== beforeReduced, 350)) === true); // well under the 460 ms animation
     check("animations: with Reduce Motion nothing animates", (await page.$eval("#deck-card", (el) => getComputedStyle(el).transitionDuration)) === "0s" || (await page.$eval("#deck-card", (el) => getComputedStyle(el).transitionProperty)) === "none");
+    check("animations: with Reduce Motion the description appears whole", (await page.locator("#deck-desc .word").count()) === 0);
+    await page.click(".toast-action");
+    await page.click("#deck-skip");
+    await page.waitForTimeout(300);
+    check("animations: with Reduce Motion Skip makes no smoke or log", (await page.locator(".puff, .sub-log").count()) === 0);
     await page.click(".toast-action");
     await openMenu();
     await page.click("#menu-wrapped");
@@ -464,14 +491,17 @@ const collapse = (nums) => {
     check("shield: the up-next title is hidden", (await page.locator("#deck-card.is-hidden-title").count()) === 1 && (await page.textContent("#deck-label")).includes("tap to reveal"));
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.click("#deck-find");
+    check("animations: revealing a hidden title does the Release seal (解) in smoke", (await page.locator("#fx-layer .kai-seal").count()) === 1 && (await page.locator("#deck-card.releasing").count()) === 1);
     check("shield: first tap on the card reveals its title", (await page.locator("#deck-card.is-hidden-title").count()) === 0);
-    check("shield: and its summary", (await blurOf("#deck-desc")) === "none");
+    check("shield: and its summary (the blur melts away)", await waitFor(async () => (await blurOf("#deck-desc")) === "none", 1500));
     await page.click(`#ep-${firstUnwatched} .ep-info`);
     check("shield: details hide the summary too", (await blurOf("#ep-sheet-desc")).includes("blur") && (await page.getAttribute("#ep-sheet-desc", "aria-hidden")) === "true");
     check("shield: details hide the title with a Show title button", (await page.locator("#ep-sheet-name.is-hidden-title").count()) === 1 && await page.isVisible("#ep-sheet-reveal"));
     await page.click("#ep-sheet-reveal");
+    check("animations: Show title and summary does the Release seal inside the sheet", (await page.locator("#ep-sheet .kai-seal").count()) === 1);
+    check("shield: focus stays in the sheet after the button goes away", await page.evaluate(() => document.activeElement && document.activeElement.id === "ep-sheet-title"));
     check("shield: Show title reveals it", (await page.locator("#ep-sheet-name.is-hidden-title").count()) === 0);
-    check("shield: Show title reveals the summary", (await blurOf("#ep-sheet-desc")) === "none" && (await page.getAttribute("#ep-sheet-desc", "aria-hidden")) === "false");
+    check("shield: Show title reveals the summary", await waitFor(async () => (await blurOf("#ep-sheet-desc")) === "none", 1500) && (await page.getAttribute("#ep-sheet-desc", "aria-hidden")) === "false");
     await page.keyboard.press("Escape");
     await menuSwitch("spoiler-shield");
     check("shield: off again shows everything", (await blurOf(`#ep-${firstUnwatched} .ep-title`)) === "none");
@@ -487,7 +517,7 @@ const collapse = (nums) => {
     await page.click(`#ep-${lastEp} .ep-info`);
     check("shield: details blur the arc of an unstarted arc", (await arcBlur("#ep-sheet-arc")).includes("blur"));
     await page.click("#ep-sheet-reveal");
-    check("shield: Show title reveals the arc too", (await arcBlur("#ep-sheet-arc")) === "none");
+    check("shield: Show title reveals the arc too", await waitFor(async () => (await arcBlur("#ep-sheet-arc")) === "none", 1500));
     await page.click('#ep-sheet-state [data-state="watched"]');
     await closeSheets();
     check("shield: watching an episode reveals that arc's name", (await arcBlur(`#${unstartedArc} .arc-name`)) === "none");

@@ -45,6 +45,11 @@ To keep things simple, the site sorts episodes into just two categories:
   - **Songs:** equalizer bars bounce on the songs playing where you are, and the note on a "New opening" flag bops.
   - **Shared list:** the race bars grow in and slide as numbers change, and the up-next card flips over when you switch between **Just Me** and **With Sara**.
   - **Share images and badges:** the preview flips in like a card, and the "Badge earned" banner drops in with a glint.
+  - **Skip is the Substitution Jutsu:** the skipped card vanishes in a puff of smoke and a wooden log drops into its place, then poofs away as the next card comes up.
+  - **Release!** With the spoiler shield on, revealing a title (tapping the up-next card, or **Show title and summary**) bursts into smoke with the 解 ("release") seal, and the blur melts away instead of snapping off.
+  - **Kunai:** tapping the up-next card scrolls to that episode, and a kunai flies in from the edge and sticks into its row with a few sparks.
+  - **Shadow clones:** after **Mark Several**, puffs of smoke pop along the part of the progress bar that just filled, and any rows on screen tick in a wave, each in its own little puff.
+  - **Descriptions:** when a new card comes up, its description fades in a word at a time.
 - **Up-next card.** A big card shows the next episode to watch: its arc, number, title and a short description, colored **green for canon** and **red for filler**. Two more cards peek out behind it, like a deck.
   - **Watched** flips the card away to the right and brings up the next one.
   - **Skip** flips it away to the left and marks the episode as *skipped*. It won't come back, and it isn't counted as watched.
@@ -402,6 +407,11 @@ OK: 220 episodes, numbered 1–220, no gaps or duplicates.
   - Wrapped's numbers count up while the real text is already final, and end on the real number
   - switching theme uses the circular reveal where the browser supports it, and the pattern drifts
   - the calendar fills in week by week, and the current songs have equalizer bars
+  - **Skip** makes the log and smoke, and they remove themselves; with Reduce Motion there's none
+  - tapping the card throws a kunai that lands on that episode's row, then goes away
+  - a new card's description fades in word by word, with exactly the same text (and appears whole with Reduce Motion)
+  - **Mark Several** puts shadow-clone smoke along the progress bar
+  - revealing a hidden title shows the 解 seal on the card and in the details, the blur melts away, and focus stays in the sheet
 - **Swipe to close** (a simulated touch screen): the sheet follows a drag, a short slow drag springs back, a long drag or a quick flick closes it, and a drag on a scrolled-down sheet scrolls instead.
 - **Your name:**
   - the first launch asks for it, and **Not Now** isn't asked again
@@ -523,7 +533,7 @@ It checks:
 - **Leave:** stopping sharing, and staying left after a reload.
 - **Security rules:** listing rooms, malformed codes, unexpected fields, deletes, and other collections are all refused.
 
-The last runs passed all 315 checks in `e2e-test.js` and all 78 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 95** in light mode (performance was 97–99 before the startup animation, which covers the first two seconds), and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
+The last runs passed all 328 checks in `e2e-test.js` and all 78 in `sync-test.js`. Lighthouse 11 (the last version with a PWA category) scored **PWA 100, Accessibility 100, Best Practices 100, Performance 95** in light mode (performance was 97–99 before the startup animation, which covers the first two seconds), and a scan of dark mode found no low-contrast text. Lighthouse also confirmed "Web app manifest and service worker meet the installability requirements". Lighthouse 12 and later no longer have a PWA category. In current Chrome, see **DevTools → Application → Manifest** for installability.
 
 ## Legal
 
